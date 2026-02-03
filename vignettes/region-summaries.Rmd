@@ -11,10 +11,10 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE,
   fig.width = 7,
   fig.height = 5
 )
+# Most chunks require network access and are set eval=FALSE individually
 ```
 
 ## Introduction
@@ -33,9 +33,169 @@ boundaries from a shapefile.
 
 ## Setup
 
-```{r setup}
+```{r setup, message=FALSE, warning=FALSE}
 library(GeoTessera)
 library(sf)
+library(ggplot2)
+```
+
+## Demonstration with Simulated Data
+
+Before working with real data, let's demonstrate the summarization workflow
+with simulated embeddings and regions.
+
+### Creating Example Regions
+
+```{r demo-regions, fig.width=6, fig.height=5}
+# Create 4 example polygon regions (simulating LGAs)
+region1 <- st_polygon(list(matrix(c(
+  0, 0, 1, 1, 0,
+  0, 1, 1, 0, 0
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region2 <- st_polygon(list(matrix(c(
+  1, 1, 2, 2, 1,
+  0, 1, 1, 0, 0
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region3 <- st_polygon(list(matrix(c(
+  0, 0, 1, 1, 0,
+  1, 2, 2, 1, 1
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region4 <- st_polygon(list(matrix(c(
+  1, 1, 2, 2, 1,
+  1, 2, 2, 1, 1
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+# Combine into sf object
+regions <- st_sf(
+  name = c("Region A", "Region B", "Region C", "Region D"),
+  land_type = c("urban", "agricultural", "forest", "mixed"),
+  geometry = c(region1, region2, region3, region4)
+)
+
+# Plot the regions
+ggplot(regions) +
+  geom_sf(aes(fill = land_type), alpha = 0.7) +
+  geom_sf_text(aes(label = name), size = 4) +
+  scale_fill_manual(values = c("urban" = "#E41A1C",
+                                "agricultural" = "#FFD92F",
+                                "forest" = "#4DAF4A",
+                                "mixed" = "#984EA3")) +
+  labs(title = "Example Administrative Regions",
+       subtitle = "Simulating 4 LGAs with different land cover types") +
+  theme_minimal()
+```
+
+### Simulating Region Embeddings
+
+```{r simulate-region-embeddings}
+set.seed(42)
+
+# Simulate mean embeddings for each region type
+# Different land types have distinct embedding signatures
+simulate_embedding <- function(land_type) {
+  base <- switch(land_type,
+    "urban" = rnorm(128, mean = 0.5, sd = 0.1),
+    "agricultural" = rnorm(128, mean = 0.0, sd = 0.15),
+    "forest" = rnorm(128, mean = -0.4, sd = 0.12),
+    "mixed" = rnorm(128, mean = 0.1, sd = 0.2)
+  )
+  base
+}
+
+# Generate embeddings for each region
+region_embeddings <- lapply(regions$land_type, simulate_embedding)
+names(region_embeddings) <- regions$name
+
+# Create embedding matrix
+emb_matrix <- do.call(rbind, region_embeddings)
+rownames(emb_matrix) <- regions$name
+
+cat("Embedding matrix dimensions:", dim(emb_matrix), "\n")
+cat("Rows:", rownames(emb_matrix), "\n")
+```
+
+### Region Similarity Heatmap
+
+```{r similarity-heatmap, fig.width=6, fig.height=5}
+# Calculate cosine similarity between regions
+cosine_sim <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+}
+
+n_regions <- nrow(emb_matrix)
+sim_matrix <- matrix(0, n_regions, n_regions)
+for (i in 1:n_regions) {
+  for (j in 1:n_regions) {
+    sim_matrix[i, j] <- cosine_sim(emb_matrix[i, ], emb_matrix[j, ])
+  }
+}
+rownames(sim_matrix) <- colnames(sim_matrix) <- regions$name
+
+# Convert to data frame for plotting
+sim_df <- as.data.frame(as.table(sim_matrix))
+names(sim_df) <- c("Region1", "Region2", "Similarity")
+
+ggplot(sim_df, aes(x = Region1, y = Region2, fill = Similarity)) +
+  geom_tile() +
+  geom_text(aes(label = round(Similarity, 2)), color = "white", size = 4) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.5) +
+  labs(title = "Region Similarity Matrix",
+       subtitle = "Cosine similarity based on mean embeddings") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Embedding Profile Comparison
+
+```{r embedding-profiles, fig.width=7, fig.height=4}
+# Compare first 20 dimensions across regions
+profile_df <- data.frame(
+  Dimension = rep(1:20, 4),
+  Value = c(emb_matrix[1, 1:20], emb_matrix[2, 1:20],
+            emb_matrix[3, 1:20], emb_matrix[4, 1:20]),
+  Region = rep(regions$name, each = 20)
+)
+
+ggplot(profile_df, aes(x = Dimension, y = Value, color = Region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Embedding Profiles by Region",
+       subtitle = "First 20 of 128 dimensions shown",
+       x = "Embedding Dimension", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+### Hierarchical Clustering of Regions
+
+```{r region-clustering, fig.width=6, fig.height=4}
+# Cluster regions by embedding similarity
+dist_matrix <- dist(emb_matrix)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# Simple dendrogram plot
+plot(hc, main = "Hierarchical Clustering of Regions",
+     sub = "Based on 128-dimensional embeddings",
+     xlab = "", ylab = "Distance")
+```
+
+### Map with Cluster Assignment
+
+```{r cluster-map, fig.width=6, fig.height=5}
+# Cut tree into 2 clusters
+regions$cluster <- factor(cutree(hc, k = 2))
+
+ggplot(regions) +
+  geom_sf(aes(fill = cluster), alpha = 0.7) +
+  geom_sf_text(aes(label = paste0(name, "\n(", land_type, ")")), size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Regions Clustered by Embedding Similarity",
+       subtitle = "Regions with similar land cover cluster together") +
+  theme_minimal()
 ```
 
 ## Loading Administrative Boundaries
@@ -43,7 +203,7 @@ library(sf)
 We'll use Nigeria's Local Government Areas (LGAs) as an example. This shapefile
 contains 774 administrative units at the admin2 level.
 
-```{r load-shapefile}
+```{r load-shapefile, eval=FALSE}
 # Load the shapefile
 nigeria_lgas <- st_read("shapefiles/nigeria_admin2_shapefile.shp", quiet = TRUE)
 
@@ -65,7 +225,7 @@ Simple feature collection with 5 features and 2 fields
 
 Let's compute embedding summaries for Aba North, a small LGA in southeastern Nigeria.
 
-```{r select-lga}
+```{r select-lga, eval=FALSE}
 # Select Aba North LGA
 aba_north <- nigeria_lgas[nigeria_lgas$adminName == "Aba North", ]
 
@@ -81,7 +241,7 @@ The `summarize_region()` method accepts an sf object directly. It will:
 - Mask pixels outside the polygon boundary
 - Compute summary statistics
 
-```{r basic-summary}
+```{r basic-summary, eval=FALSE}
 # Create GeoTessera client
 gt <- geotessera()
 
@@ -114,7 +274,7 @@ result$metadata
 
 By default, `summarize_region()` computes three summaries:
 
-```{r default-summaries}
+```{r default-summaries, eval=FALSE}
 # Mean embedding (128-dimensional vector)
 mean_embedding <- result$summaries$mean
 length(mean_embedding)
@@ -153,7 +313,7 @@ GeoTessera provides several built-in summary functions:
 | `summary_quantile(probs)` | Factory for quantile summaries |
 | `summary_random_sample(n, seed)` | Factory for random sampling |
 
-```{r builtin-summaries}
+```{r builtin-summaries, eval=FALSE}
 # Use specific summary functions
 result <- gt$summarize_region(
   region = aba_north,
@@ -175,7 +335,7 @@ summary(sd_embedding)
 
 Use `summary_quantile()` to create a function that computes specific quantiles:
 
-```{r quantile-summary}
+```{r quantile-summary, eval=FALSE}
 # Create a function for 10th and 90th percentiles
 result <- gt$summarize_region(
   region = aba_north,
@@ -193,7 +353,7 @@ length(result$summaries$q10_90)
 
 Use `summary_random_sample()` to extract random pixel embeddings:
 
-```{r random-sample}
+```{r random-sample, eval=FALSE}
 # Sample 50 random pixels (reproducible with seed)
 result <- gt$summarize_region(
   region = aba_north,
@@ -216,7 +376,7 @@ Create your own summary function. It should accept:
 - `region`: The input region (sf object or bbox)
 - `tiles_df`: Tile metadata data frame
 
-```{r custom-summary}
+```{r custom-summary, eval=FALSE}
 # Custom function: compute the embedding at the pixel with maximum brightness
 # (using sum across channels as a proxy for "brightness")
 summary_max_brightness <- function(embeddings, region = NULL, tiles_df = NULL) {
@@ -265,7 +425,7 @@ provides an optimized `summarize_regions_streaming()` function that:
 
 ### Efficient Multi-Region Processing
 
-```{r multi-region-streaming}
+```{r multi-region-streaming, eval=FALSE}
 # Select adjacent LGAs that share tiles
 selected_lgas <- c("Aba North", "Aba South", "Osisioma Ngwa", "Ugwunagbo")
 lgas_subset <- nigeria_lgas[nigeria_lgas$adminName %in% selected_lgas, ]
@@ -301,7 +461,7 @@ The function returns:
 - `pixel_counts`: Number of pixels processed per region
 - `metadata`: Processing statistics
 
-```{r multi-region-results}
+```{r multi-region-results, eval=FALSE}
 # Access results for a specific region
 aba_north_embedding <- result$summaries[["Aba North"]]
 length(aba_north_embedding)
@@ -338,7 +498,7 @@ Optimized streaming (summarize_regions_streaming):
 For processing many regions (e.g., all LGAs in a country), use sampling
 to reduce processing time:
 
-```{r large-scale}
+```{r large-scale, eval=FALSE}
 # Process all LGAs in a state
 abia_lgas <- nigeria_lgas[grepl("^NG001", nigeria_lgas$adminCode), ]
 
@@ -356,7 +516,7 @@ result <- summarize_regions_streaming(
 
 Combine embeddings with administrative metadata:
 
-```{r summary-dataframe}
+```{r summary-dataframe, eval=FALSE}
 # Create data frame with LGA info and embeddings
 embedding_matrix <- do.call(rbind, result$summaries)
 lga_embeddings <- data.frame(
@@ -376,7 +536,7 @@ head(lga_embeddings[, 1:5])
 By default, pixels outside the region boundary are masked (set to NA). You can
 disable this to include all pixels within the bounding box:
 
-```{r no-masking}
+```{r no-masking, eval=FALSE}
 # Without masking - uses rectangular bounding box
 result_unmasked <- gt$summarize_region(
   region = aba_north,
@@ -401,7 +561,7 @@ result_masked$summaries$coverage["n_valid_pixels"]
 
 You can also use simple bounding boxes instead of sf objects:
 
-```{r bbox-summary}
+```{r bbox-summary, eval=FALSE}
 # Define a bounding box (xmin, ymin, xmax, ymax)
 bbox <- c(7.33, 5.08, 7.40, 5.14)
 
@@ -422,7 +582,7 @@ result$metadata$is_masked
 Downloaded tiles are stored in a temporary directory and automatically cleaned
 up when `summarize_region()` completes. If you need to keep the tiles:
 
-```{r keep-tiles}
+```{r keep-tiles, eval=FALSE}
 result <- gt$summarize_region(
   region = aba_north,
   year = 2024,
@@ -446,7 +606,7 @@ out of memory because it loads all embeddings before computing statistics.
 Use `summarize_region_streaming()` for memory-efficient processing of large
 single regions:
 
-```{r large-region-streaming}
+```{r large-region-streaming, eval=FALSE}
 # Abaji LGA requires 36 tiles - too large for standard approach
 abaji <- nigeria_lgas[nigeria_lgas$adminName == "Abaji", ]
 
@@ -475,7 +635,7 @@ The streaming approach:
 Another memory-efficient approach is to sample random points within the
 polygon and fetch their embeddings:
 
-```{r point-sampling}
+```{r point-sampling, eval=FALSE}
 # Sample 1000 random points inside the polygon
 set.seed(42)
 sample_points <- st_sample(abaji, size = 1000)
@@ -494,7 +654,7 @@ mean_embedding <- colMeans(embeddings_df[, -(1:2)], na.rm = TRUE)
 Here's a complete example that clusters Nigerian LGAs based on embedding similarity,
 using the optimized multi-region streaming approach:
 
-```{r clustering-example}
+```{r clustering-example, eval=FALSE}
 library(GeoTessera)
 library(sf)
 

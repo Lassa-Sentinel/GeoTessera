@@ -11,7 +11,6 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE,
   fig.width = 7,
   fig.height = 5
 )
@@ -42,8 +41,153 @@ remotes::install_github("lassa_sentinel/GeoTessera")
 install.packages("path/to/GeoTessera", repos = NULL, type = "source")
 ```
 
-```{r setup}
+```{r setup, message=FALSE, warning=FALSE}
 library(GeoTessera)
+```
+
+## Coordinate System Demonstration
+
+Before diving into downloads, let's demonstrate how GeoTessera's coordinate system works.
+These examples run without network access.
+
+### Tile Coordinate Conversion
+
+GeoTessera tiles are 0.1° × 0.1° cells aligned to a global grid:
+
+```{r tile-coords}
+# Convert a world coordinate to its containing tile
+tile_coords <- tile_from_world(lon = 0.17, lat = 52.23)
+print(tile_coords)
+# This point falls within tile (0.15, 52.25)
+
+# Get the bounds of that tile
+bounds <- tile_to_bounds(tile_coords$tile_lon, tile_coords$tile_lat)
+print(bounds)
+# The tile covers lon: [0.15, 0.25), lat: [52.2, 52.3)
+```
+
+### Visualizing the Tile Grid
+
+```{r tile-grid-viz, fig.width=6, fig.height=5}
+library(ggplot2)
+
+# Cambridge region bounding box
+cambridge <- data.frame(
+  xmin = 0.086174, ymin = 52.183432,
+ xmax = 0.151062, ymax = 52.206318
+)
+
+# Calculate which tiles cover this region
+tiles <- expand.grid(
+  tile_lon = seq(0.05, 0.15, by = 0.1),
+  tile_lat = seq(52.15, 52.25, by = 0.1)
+)
+
+# Create tile polygons
+tile_polys <- do.call(rbind, lapply(1:nrow(tiles), function(i) {
+  bounds <- tile_to_bounds(tiles$tile_lon[i], tiles$tile_lat[i])
+  data.frame(
+    tile = paste0("grid_", tiles$tile_lon[i], "_", tiles$tile_lat[i]),
+    x = c(bounds$xmin, bounds$xmax, bounds$xmax, bounds$xmin, bounds$xmin),
+    y = c(bounds$ymin, bounds$ymin, bounds$ymax, bounds$ymax, bounds$ymin)
+  )
+}))
+
+# Plot the tile grid with Cambridge bbox
+ggplot() +
+  geom_polygon(data = tile_polys, aes(x = x, y = y, group = tile),
+               fill = "lightblue", color = "darkblue", alpha = 0.3) +
+  geom_rect(data = cambridge,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = NA, color = "red", linewidth = 1.5) +
+  geom_text(data = tiles, aes(x = tile_lon + 0.05, y = tile_lat + 0.05,
+            label = paste0(tile_lon, ", ", tile_lat)),
+            size = 3) +
+  coord_fixed() +
+  labs(title = "GeoTessera Tile Grid",
+       subtitle = "Cambridge region (red box) spans 4 tiles",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+### Simulated Embedding Visualization
+
+Here's what a single tile's embeddings look like when visualized:
+
+```{r simulated-embedding-viz, fig.width=7, fig.height=6}
+# Create simulated embedding data (128 channels, 100x100 pixels for speed)
+set.seed(42)
+n_pixels <- 100
+n_channels <- 128
+
+# Simulate smooth spatial patterns using simple gradients + noise
+x_grid <- matrix(rep(1:n_pixels, n_pixels), nrow = n_pixels, byrow = TRUE)
+y_grid <- matrix(rep(1:n_pixels, n_pixels), nrow = n_pixels, byrow = FALSE)
+
+# Create a 3-channel visualization (simulating first 3 embedding bands)
+band1 <- (x_grid / n_pixels + rnorm(n_pixels^2, 0, 0.1)) * 255
+band2 <- (y_grid / n_pixels + rnorm(n_pixels^2, 0, 0.1)) * 255
+band3 <- ((x_grid + y_grid) / (2 * n_pixels) + rnorm(n_pixels^2, 0, 0.1)) * 255
+
+# Clamp values
+band1 <- pmax(0, pmin(255, band1))
+band2 <- pmax(0, pmin(255, band2))
+band3 <- pmax(0, pmin(255, band3))
+
+# Create data frame for plotting
+sim_data <- data.frame(
+  x = rep(1:n_pixels, n_pixels),
+  y = rep(1:n_pixels, each = n_pixels),
+  Band1 = as.vector(band1),
+  Band2 = as.vector(band2),
+  Band3 = as.vector(band3)
+)
+
+# Reshape for faceted plot
+library(tidyr)
+sim_long <- pivot_longer(sim_data, cols = c(Band1, Band2, Band3),
+                          names_to = "band", values_to = "value")
+
+ggplot(sim_long, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  facet_wrap(~band, ncol = 3) +
+  scale_fill_viridis_c() +
+  coord_fixed() +
+  labs(title = "Simulated Embedding Bands",
+       subtitle = "Each tile contains 128 such bands at 1111×1111 pixels",
+       x = "Pixel X", y = "Pixel Y") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+### Embedding Value Distribution
+
+```{r embedding-distribution, fig.width=6, fig.height=4}
+# Simulate what real embedding distributions look like
+set.seed(123)
+n_samples <- 1000
+
+# Embeddings typically have structured distributions per channel
+embedding_samples <- data.frame(
+  Channel = rep(paste0("Ch", 1:6), each = n_samples),
+  Value = c(
+    rnorm(n_samples, mean = -0.5, sd = 0.3),
+    rnorm(n_samples, mean = 0.2, sd = 0.5),
+    rnorm(n_samples, mean = 0.8, sd = 0.2),
+    rnorm(n_samples, mean = -0.1, sd = 0.4),
+    rnorm(n_samples, mean = 0.5, sd = 0.6),
+    rnorm(n_samples, mean = 0.0, sd = 0.25)
+  )
+)
+
+ggplot(embedding_samples, aes(x = Value, fill = Channel)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~Channel, scales = "free_y") +
+  labs(title = "Embedding Value Distributions by Channel",
+       subtitle = "Each of 128 channels captures different features",
+       x = "Embedding Value", y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "none")
 ```
 
 ## Understanding the Data Structure
@@ -69,7 +213,7 @@ each with 128 embedding values.
 
 The main entry point is the `geotessera()` function:
 
-```{r client}
+```{r client, eval=FALSE}
 # Create a client with default settings
 gt <- geotessera()
 
@@ -79,7 +223,7 @@ print(gt)
 
 You can customize the client with various options:
 
-```{r client-custom}
+```{r client-custom, eval=FALSE}
 gt <- geotessera(
   dataset_version = "v1",           # Dataset version
   cache_dir = "~/.cache/geotessera", # Where to cache registry files
@@ -95,7 +239,7 @@ contains 4 tiles (approximately 400 MB total) and is a good size for getting sta
 
 ### Step 1: Initialize and Query
 
-```{r cambridge-query}
+```{r cambridge-query, eval=FALSE}
 # Create client
 gt <- geotessera()
 
@@ -118,7 +262,7 @@ print(paste("Tiles available:", n_tiles))
 
 ### Step 2: Get Tile Metadata
 
-```{r cambridge-tiles}
+```{r cambridge-tiles, eval=FALSE}
 # Get tile metadata (doesn't download data yet)
 tiles <- gt$get_tiles(
   bbox = list(
@@ -140,7 +284,7 @@ print(tiles)
 
 ### Step 3: Download and Export as GeoTIFFs
 
-```{r cambridge-export}
+```{r cambridge-export, eval=FALSE}
 # Export tiles as GeoTIFFs (downloads data and converts)
 output_dir <- "cambridge_embeddings"
 paths <- gt$export_embedding_geotiffs(
@@ -156,7 +300,7 @@ print(paths)
 
 ### Step 4: Load and Inspect a Tile
 
-```{r cambridge-load}
+```{r cambridge-load, eval=FALSE}
 # Download a single tile containing a specific point
 tile <- gt$download_tile(
   lon = 0.1,      # A point within Cambridge
@@ -181,7 +325,7 @@ print(length(pixel_embedding))  # 128 values
 
 ### Step 5: Sample at Specific Points
 
-```{r cambridge-sample}
+```{r cambridge-sample, eval=FALSE}
 # Define sample points within Cambridge
 sample_points <- data.frame(
   lon = c(0.10, 0.12, 0.14),
@@ -211,7 +355,7 @@ print(names(samples)[1:10])
 
 A larger example covering London:
 
-```{r uk-region}
+```{r uk-region, eval=FALSE}
 # UK region around London (16 tiles)
 uk_bbox <- list(xmin = -0.1, ymin = 51.3, xmax = 0.1, ymax = 51.5)
 
@@ -227,7 +371,7 @@ print(nrow(uk_tiles))  # 16
 
 ### Single Tile from a Point
 
-```{r single-point}
+```{r single-point, eval=FALSE}
 # Any point resolves to a specific tile
 # Point (0.17, 52.23) -> tile grid_0.15_52.25
 tile_coords <- tile_from_world(0.17, 52.23)
@@ -241,7 +385,7 @@ print(single_tile$get_grid_name())  # "grid_0.15_52.25"
 
 ## Exploring Available Data
 
-```{r explore}
+```{r explore, eval=FALSE}
 # Check available years
 years <- gt$registry$get_available_years()
 print(years)
@@ -254,7 +398,7 @@ print(counts)
 
 ## Different Bounding Box Formats
 
-```{r bbox-formats}
+```{r bbox-formats, eval=FALSE}
 # As a named vector
 bbox <- c(xmin = 0.086174, ymin = 52.183432, xmax = 0.151062, ymax = 52.206318)
 
@@ -274,7 +418,7 @@ tiles <- gt$get_tiles(bbox = bbox, year = 2024)
 
 ## Exporting Specific Bands
 
-```{r export-bands}
+```{r export-bands, eval=FALSE}
 # Export only first 3 bands (useful for RGB visualization)
 paths <- gt$export_embedding_geotiffs(
   tiles = tiles,
@@ -288,7 +432,7 @@ paths <- gt$export_embedding_geotiffs(
 
 The exported GeoTIFFs work seamlessly with the `terra` package:
 
-```{r terra-integration}
+```{r terra-integration, eval=FALSE}
 library(terra)
 
 # Load an exported tile
@@ -318,7 +462,7 @@ global(r[[1]], fun = "mean", na.rm = TRUE)
 
 Reduce 128 bands to 3 principal components for visualization:
 
-```{r pca}
+```{r pca, eval=FALSE}
 # Load embedding from a tile
 tile <- gt$download_tile(lon = 0.1, lat = 52.2, year = 2024)
 embedding <- tile$load_embedding()
@@ -344,7 +488,7 @@ pca_paths <- gt$export_pca_geotiffs(
 
 Combine multiple tiles into a single raster:
 
-```{r merge-mosaic}
+```{r merge-mosaic, eval=FALSE}
 # Merge all GeoTIFFs in a directory
 gt$merge_geotiffs_to_mosaic(
   input_dir = "cambridge_embeddings",
@@ -363,7 +507,7 @@ writeRaster(mosaic, "cambridge_mosaic_terra.tif")
 
 If you have previously downloaded tiles, you can discover them:
 
-```{r discover}
+```{r discover, eval=FALSE}
 # Auto-detect tile format and find all tiles
 tiles <- discover_tiles("cambridge_embeddings")
 print(length(tiles))
@@ -378,7 +522,7 @@ print(length(formats$geotiff))
 
 ### Cache Directory
 
-```{r cache-config}
+```{r cache-config, eval=FALSE}
 # Check default cache location
 print(get_cache_dir())
 
@@ -391,7 +535,7 @@ gt <- geotessera(cache_dir = "/custom/cache")
 
 ### Hash Verification
 
-```{r hash-config}
+```{r hash-config, eval=FALSE}
 # Disable hash verification for faster downloads (not recommended for production)
 gt <- geotessera(verify_hashes = FALSE)
 ```

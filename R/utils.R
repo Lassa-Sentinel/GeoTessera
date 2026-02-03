@@ -34,12 +34,10 @@ block_from_world <- function(lon, lat) {
 #' @param lon Longitude in decimal degrees
 #' @param lat Latitude in decimal degrees
 #' @return Named list with tile_lon and tile_lat (center coordinates)
-#' @keywords internal
+#' @export
 #' @examples
-#' \dontrun{
 #' tile_from_world(0.17, 52.23)  # Returns (0.15, 52.25)
-#' tile_from_world(-0.1, 51.3)   # Returns (-0.05, 51.35)
-#' }
+#' tile_from_world(-0.1, 51.3)   # Returns (-0.15, 51.25)
 tile_from_world <- function(lon, lat) {
   # Use multiply-then-divide to avoid floating-point precision issues
   # (e.g., 51.3 / 0.1 can give 512.999... which floors to 512)
@@ -50,10 +48,15 @@ tile_from_world <- function(lon, lat) {
 
 #' Get tile bounds from center coordinates
 #'
+#' Given the center coordinates of a GeoTessera tile, returns the bounding box.
+#' Each tile is 0.1 x 0.1 degrees.
+#'
 #' @param lon Tile center longitude
 #' @param lat Tile center latitude
 #' @return Named list with xmin, ymin, xmax, ymax
-#' @keywords internal
+#' @export
+#' @examples
+#' tile_to_bounds(0.15, 52.25)  # Returns xmin=0.1, ymin=52.2, xmax=0.2, ymax=52.3
 tile_to_bounds <- function(lon, lat) {
   list(
     xmin = lon - TILE_OFFSET,

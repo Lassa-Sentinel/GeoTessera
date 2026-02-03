@@ -11,10 +11,10 @@ vignette: >
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>",
-  eval = FALSE,
   fig.width = 7,
   fig.height = 5
 )
+# Most chunks require network access and are set eval=FALSE individually
 ```
 
 ## Introduction
@@ -27,10 +27,176 @@ Sentinel-1 and Sentinel-2 satellite imagery.
 This vignette demonstrates common machine learning workflows using the Cambridge
 region (4 tiles, ~400 MB) as a practical example.
 
-```{r setup}
+```{r setup, message=FALSE, warning=FALSE}
 library(GeoTessera)
-library(terra)
-library(sf)
+library(ggplot2)
+```
+
+## Demonstration with Simulated Data
+
+Before working with real data, let's demonstrate the machine learning workflows
+using simulated embeddings. This helps understand the structure without requiring
+downloads.
+
+### Simulated 128-Channel Embeddings
+
+```{r simulate-embeddings}
+set.seed(42)
+n_samples <- 500
+
+# Simulate 128-dimensional embeddings with 3 land cover types
+# Each class has distinct patterns in embedding space
+generate_class_embeddings <- function(n, class_id) {
+  # Base pattern varies by class
+  base <- switch(class_id,
+    "urban" = rnorm(128, mean = 0.5, sd = 0.1),
+    "vegetation" = rnorm(128, mean = -0.3, sd = 0.15),
+    "water" = rnorm(128, mean = 0.1, sd = 0.05)
+  )
+
+  # Generate samples with class-specific variation
+  samples <- matrix(nrow = n, ncol = 128)
+  for (i in 1:n) {
+    samples[i, ] <- base + rnorm(128, sd = 0.2)
+  }
+  samples
+}
+
+# Generate data for each class
+urban_emb <- generate_class_embeddings(200, "urban")
+veg_emb <- generate_class_embeddings(200, "vegetation")
+water_emb <- generate_class_embeddings(100, "water")
+
+# Combine into training data
+X <- rbind(urban_emb, veg_emb, water_emb)
+y <- factor(c(rep("urban", 200), rep("vegetation", 200), rep("water", 100)))
+
+cat("Training data dimensions:", dim(X), "\n")
+cat("Class distribution:\n")
+print(table(y))
+```
+
+### PCA Visualization of Embeddings
+
+```{r pca-demo, fig.width=7, fig.height=5}
+# Apply PCA to visualize the 128-dimensional embeddings
+pca_result <- prcomp(X, center = TRUE, scale. = TRUE)
+
+# Variance explained
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Create visualization data
+pca_df <- data.frame(
+  PC1 = pca_result$x[, 1],
+  PC2 = pca_result$x[, 2],
+  PC3 = pca_result$x[, 3],
+  Class = y
+)
+
+# Plot PC1 vs PC2
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Class)) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_manual(values = c("urban" = "#E41A1C",
+                                 "vegetation" = "#4DAF4A",
+                                 "water" = "#377EB8")) +
+  labs(title = "PCA of Simulated Tessera Embeddings",
+       subtitle = sprintf("PC1: %.1f%% var, PC2: %.1f%% var",
+                         var_explained[1]*100, var_explained[2]*100),
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+### Scree Plot
+
+```{r scree-plot, fig.width=6, fig.height=4}
+scree_df <- data.frame(
+  PC = 1:20,
+  Variance = var_explained[1:20],
+  Cumulative = cumsum(var_explained[1:20])
+)
+
+ggplot(scree_df, aes(x = PC)) +
+  geom_bar(aes(y = Variance), stat = "identity", fill = "steelblue", alpha = 0.7) +
+  geom_line(aes(y = Cumulative), color = "red", linewidth = 1) +
+  geom_point(aes(y = Cumulative), color = "red", size = 2) +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "gray50") +
+  scale_y_continuous(
+    name = "Variance Explained",
+    sec.axis = sec_axis(~., name = "Cumulative Variance")
+  ) +
+  labs(title = "PCA Scree Plot",
+       subtitle = "Dashed line shows 95% cumulative variance threshold",
+       x = "Principal Component") +
+  theme_minimal()
+```
+
+### K-Means Clustering
+
+```{r kmeans-demo, fig.width=7, fig.height=5}
+# K-means clustering (unsupervised)
+set.seed(123)
+kmeans_result <- kmeans(X, centers = 3, nstart = 25)
+
+pca_df$Cluster <- factor(kmeans_result$cluster)
+
+# Compare clusters to actual classes
+ggplot(pca_df, aes(x = PC1, y = PC2)) +
+  geom_point(aes(color = Cluster, shape = Class), alpha = 0.6, size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "K-Means Clustering vs True Classes",
+       subtitle = "Colors = K-means clusters, Shapes = True classes",
+       x = "PC1", y = "PC2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+### Classification Confusion Matrix
+
+```{r confusion-demo, fig.width=5, fig.height=4}
+# Simple classification assessment using cluster assignment
+# Map clusters to most common class
+cluster_class_map <- sapply(1:3, function(k) {
+  names(which.max(table(y[kmeans_result$cluster == k])))
+})
+
+predicted <- factor(cluster_class_map[kmeans_result$cluster], levels = levels(y))
+conf_matrix <- table(Predicted = predicted, Actual = y)
+
+# Convert to data frame for plotting
+conf_df <- as.data.frame(conf_matrix)
+
+ggplot(conf_df, aes(x = Actual, y = Predicted, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  scale_fill_gradient(low = "steelblue", high = "darkred") +
+  labs(title = "Classification Confusion Matrix",
+       subtitle = "Cluster-based class assignment") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+### Feature Importance (Simulated)
+
+```{r feature-importance, fig.width=7, fig.height=4}
+# Simulate feature importance (as would come from Random Forest)
+set.seed(456)
+importance_df <- data.frame(
+  Band = paste0("Band_", 1:128),
+  Importance = abs(rnorm(128, mean = 0.02, sd = 0.015))
+)
+importance_df <- importance_df[order(-importance_df$Importance), ]
+importance_df$Rank <- 1:128
+
+# Plot top 20
+ggplot(importance_df[1:20, ], aes(x = reorder(Band, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Important Embedding Bands",
+       subtitle = "Simulated Random Forest variable importance",
+       x = "Embedding Band", y = "Importance") +
+  theme_minimal()
 ```
 
 ## Download Cambridge Region Data
@@ -38,7 +204,7 @@ library(sf)
 First, let's download the Cambridge region embeddings which we'll use throughout
 this vignette.
 
-```{r download-cambridge}
+```{r download-cambridge, eval=FALSE}
 # Create client
 gt <- geotessera()
 
@@ -75,7 +241,7 @@ A common use case is classifying land cover types using labeled training data.
 
 ### Preparing Training Data with Real Embeddings
 
-```{r prepare-training}
+```{r prepare-training, eval=FALSE}
 # Sample training locations across Cambridge
 # These represent different land cover types in the region
 training_sites <- data.frame(
@@ -117,7 +283,7 @@ print(table(y_train))
 
 ### Training a Random Forest Classifier
 
-```{r train-rf}
+```{r train-rf, eval=FALSE}
 library(randomForest)
 
 # Train random forest
@@ -140,7 +306,7 @@ print(head(importance_df, 20))
 
 ### Predicting on New Locations
 
-```{r predict-rf}
+```{r predict-rf, eval=FALSE}
 # Sample embeddings at new locations within Cambridge
 new_sites <- data.frame(
   lon = c(0.09, 0.11, 0.13, 0.10),
@@ -164,7 +330,7 @@ print(results)
 
 ### Classifying an Entire Tile
 
-```{r classify-tile}
+```{r classify-tile, eval=FALSE}
 # Load a Cambridge tile
 tile <- gt$download_tile(lon = 0.1, lat = 52.2, year = 2024)
 
@@ -211,7 +377,7 @@ Use unsupervised learning to discover natural groupings in Cambridge embeddings.
 
 ### K-Means Clustering
 
-```{r kmeans}
+```{r kmeans, eval=FALSE}
 # Sample random points across Cambridge region
 set.seed(123)
 n_samples <- 2000
@@ -254,7 +420,7 @@ ggplot(points_valid, aes(x = lon, y = lat, color = cluster)) +
 
 ### Hierarchical Clustering
 
-```{r hclust}
+```{r hclust, eval=FALSE}
 # Use subset for hierarchical clustering (memory intensive)
 set.seed(42)
 subset_idx <- sample(nrow(X_valid), min(500, nrow(X_valid)))
@@ -277,7 +443,7 @@ clusters <- cutree(hc, k = 5)
 
 ### PCA for Visualization
 
-```{r pca-viz}
+```{r pca-viz, eval=FALSE}
 # Apply PCA to Cambridge embeddings
 pca_result <- prcomp(X_valid, center = TRUE, scale. = TRUE)
 
@@ -309,7 +475,7 @@ ggplot(pca_df, aes(x = PC1, y = PC2, color = cluster)) +
 
 ### Built-in PCA Export
 
-```{r pca-export}
+```{r pca-export, eval=FALSE}
 # Export tiles with PCA reduction applied
 pca_paths <- gt$export_pca_geotiffs(
   tiles = tiles,
@@ -326,7 +492,7 @@ plotRGB(r_pca, stretch = "lin", main = "PCA RGB Composite")
 
 ### UMAP for Nonlinear Visualization
 
-```{r umap}
+```{r umap, eval=FALSE}
 library(uwot)
 
 # UMAP embedding
@@ -358,7 +524,7 @@ Compare embeddings from different years to detect changes in Cambridge.
 
 ### Temporal Difference Analysis
 
-```{r change-detection}
+```{r change-detection, eval=FALSE}
 # Sample locations for change analysis
 analysis_points <- data.frame(
   lon = seq(cambridge_bbox$xmin, cambridge_bbox$xmax, length.out = 100),
@@ -398,7 +564,7 @@ ggplot(change_df, aes(x = lon, y = change)) +
 
 ### Change Maps
 
-```{r change-map}
+```{r change-map, eval=FALSE}
 # Download tiles for two years
 tile_2020 <- gt$download_tile(lon = 0.1, lat = 52.2, year = 2020)
 tile_2024 <- gt$download_tile(lon = 0.1, lat = 52.2, year = 2024)
@@ -434,7 +600,7 @@ Predict continuous variables using Cambridge embeddings.
 
 ### Gradient Boosting Regression
 
-```{r gbm-regression}
+```{r gbm-regression, eval=FALSE}
 library(xgboost)
 
 # Example: Predict a continuous variable from embeddings
@@ -483,7 +649,7 @@ Use Cambridge embeddings with deep learning frameworks.
 
 ### Preparing Data for torch
 
-```{r torch-prep}
+```{r torch-prep, eval=FALSE}
 library(torch)
 
 # Convert embeddings to torch tensors
@@ -499,7 +665,7 @@ dataloader <- dataloader(dataset, batch_size = 32, shuffle = TRUE)
 
 ### Simple Neural Network Classifier
 
-```{r torch-model}
+```{r torch-model, eval=FALSE}
 # Define model
 net <- nn_module(
   "EmbeddingClassifier",
@@ -556,7 +722,7 @@ Process all 4 Cambridge tiles systematically.
 
 ### Batch Processing
 
-```{r batch-processing}
+```{r batch-processing, eval=FALSE}
 # Process each tile
 results <- list()
 
@@ -595,7 +761,7 @@ print(summary_df)
 
 ### Parallel Processing
 
-```{r parallel}
+```{r parallel, eval=FALSE}
 library(parallel)
 library(foreach)
 library(doParallel)
@@ -638,7 +804,7 @@ print(results)
 
 Save and load trained models for reuse.
 
-```{r model-persistence}
+```{r model-persistence, eval=FALSE}
 # Save random forest model
 saveRDS(rf_model, "cambridge_rf_model.rds")
 

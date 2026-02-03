@@ -38,6 +38,10 @@ reference:
   - starts_with("tile_")
   - discover_tiles
   - discover_formats
+- title: Coordinate Utilities
+  contents:
+  - tile_from_world
+  - tile_to_bounds
 - title: Registry
   contents:
   - Registry
