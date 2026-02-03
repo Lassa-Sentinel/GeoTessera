@@ -1,0 +1,52 @@
+url: https://lassa-sentinel.github.io/GeoTessera/
+
+template:
+  bootstrap: 5
+
+navbar:
+  structure:
+    left:  [intro, reference, articles]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/Lassa-Sentinel/GeoTessera
+
+articles:
+- title: Getting Started
+  contents:
+  - getting-started
+- title: Advanced Usage
+  contents:
+  - region-summaries
+  - machine-learning
+
+reference:
+- title: Main Interface
+  contents:
+  - GeoTessera
+  - geotessera
+- title: Region Summarization
+  contents:
+  - summarize_regions_streaming
+  - summary_mean_streaming
+  - starts_with("summary_")
+- title: Tile Operations
+  contents:
+  - Tile
+  - starts_with("tile_")
+  - discover_tiles
+- title: Registry
+  contents:
+  - Registry
+- title: Visualization
+  contents:
+  - visualize_global_coverage
+  - create_rgb_mosaic
+  - create_pca_mosaic
+  - plot_embedding_bands
+- title: Country Lookup
+  contents:
+  - CountryLookup
+  - get_country_bbox
+  - find_country_for_point
