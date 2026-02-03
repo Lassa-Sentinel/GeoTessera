@@ -13,9 +13,190 @@ Cambridge region (4 tiles, ~400 MB) as a practical example.
 
 ``` r
 library(GeoTessera)
-library(terra)
-library(sf)
+library(ggplot2)
 ```
+
+## Demonstration with Simulated Data
+
+Before working with real data, let’s demonstrate the machine learning
+workflows using simulated embeddings. This helps understand the
+structure without requiring downloads.
+
+### Simulated 128-Channel Embeddings
+
+``` r
+set.seed(42)
+n_samples <- 500
+
+# Simulate 128-dimensional embeddings with 3 land cover types
+# Each class has distinct patterns in embedding space
+generate_class_embeddings <- function(n, class_id) {
+  # Base pattern varies by class
+  base <- switch(class_id,
+    "urban" = rnorm(128, mean = 0.5, sd = 0.1),
+    "vegetation" = rnorm(128, mean = -0.3, sd = 0.15),
+    "water" = rnorm(128, mean = 0.1, sd = 0.05)
+  )
+
+  # Generate samples with class-specific variation
+  samples <- matrix(nrow = n, ncol = 128)
+  for (i in 1:n) {
+    samples[i, ] <- base + rnorm(128, sd = 0.2)
+  }
+  samples
+}
+
+# Generate data for each class
+urban_emb <- generate_class_embeddings(200, "urban")
+veg_emb <- generate_class_embeddings(200, "vegetation")
+water_emb <- generate_class_embeddings(100, "water")
+
+# Combine into training data
+X <- rbind(urban_emb, veg_emb, water_emb)
+y <- factor(c(rep("urban", 200), rep("vegetation", 200), rep("water", 100)))
+
+cat("Training data dimensions:", dim(X), "\n")
+#> Training data dimensions: 500 128
+cat("Class distribution:\n")
+#> Class distribution:
+print(table(y))
+#> y
+#>      urban vegetation      water 
+#>        200        200        100
+```
+
+### PCA Visualization of Embeddings
+
+``` r
+# Apply PCA to visualize the 128-dimensional embeddings
+pca_result <- prcomp(X, center = TRUE, scale. = TRUE)
+
+# Variance explained
+var_explained <- pca_result$sdev^2 / sum(pca_result$sdev^2)
+
+# Create visualization data
+pca_df <- data.frame(
+  PC1 = pca_result$x[, 1],
+  PC2 = pca_result$x[, 2],
+  PC3 = pca_result$x[, 3],
+  Class = y
+)
+
+# Plot PC1 vs PC2
+ggplot(pca_df, aes(x = PC1, y = PC2, color = Class)) +
+  geom_point(alpha = 0.6, size = 2) +
+  scale_color_manual(values = c("urban" = "#E41A1C",
+                                 "vegetation" = "#4DAF4A",
+                                 "water" = "#377EB8")) +
+  labs(title = "PCA of Simulated Tessera Embeddings",
+       subtitle = sprintf("PC1: %.1f%% var, PC2: %.1f%% var",
+                         var_explained[1]*100, var_explained[2]*100),
+       x = "Principal Component 1",
+       y = "Principal Component 2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+![](machine-learning_files/figure-html/pca-demo-1.png)
+
+### Scree Plot
+
+``` r
+scree_df <- data.frame(
+  PC = 1:20,
+  Variance = var_explained[1:20],
+  Cumulative = cumsum(var_explained[1:20])
+)
+
+ggplot(scree_df, aes(x = PC)) +
+  geom_bar(aes(y = Variance), stat = "identity", fill = "steelblue", alpha = 0.7) +
+  geom_line(aes(y = Cumulative), color = "red", linewidth = 1) +
+  geom_point(aes(y = Cumulative), color = "red", size = 2) +
+  geom_hline(yintercept = 0.95, linetype = "dashed", color = "gray50") +
+  scale_y_continuous(
+    name = "Variance Explained",
+    sec.axis = sec_axis(~., name = "Cumulative Variance")
+  ) +
+  labs(title = "PCA Scree Plot",
+       subtitle = "Dashed line shows 95% cumulative variance threshold",
+       x = "Principal Component") +
+  theme_minimal()
+```
+
+![](machine-learning_files/figure-html/scree-plot-1.png)
+
+### K-Means Clustering
+
+``` r
+# K-means clustering (unsupervised)
+set.seed(123)
+kmeans_result <- kmeans(X, centers = 3, nstart = 25)
+
+pca_df$Cluster <- factor(kmeans_result$cluster)
+
+# Compare clusters to actual classes
+ggplot(pca_df, aes(x = PC1, y = PC2)) +
+  geom_point(aes(color = Cluster, shape = Class), alpha = 0.6, size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "K-Means Clustering vs True Classes",
+       subtitle = "Colors = K-means clusters, Shapes = True classes",
+       x = "PC1", y = "PC2") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+![](machine-learning_files/figure-html/kmeans-demo-1.png)
+
+### Classification Confusion Matrix
+
+``` r
+# Simple classification assessment using cluster assignment
+# Map clusters to most common class
+cluster_class_map <- sapply(1:3, function(k) {
+  names(which.max(table(y[kmeans_result$cluster == k])))
+})
+
+predicted <- factor(cluster_class_map[kmeans_result$cluster], levels = levels(y))
+conf_matrix <- table(Predicted = predicted, Actual = y)
+
+# Convert to data frame for plotting
+conf_df <- as.data.frame(conf_matrix)
+
+ggplot(conf_df, aes(x = Actual, y = Predicted, fill = Freq)) +
+  geom_tile() +
+  geom_text(aes(label = Freq), color = "white", size = 5) +
+  scale_fill_gradient(low = "steelblue", high = "darkred") +
+  labs(title = "Classification Confusion Matrix",
+       subtitle = "Cluster-based class assignment") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+![](machine-learning_files/figure-html/confusion-demo-1.png)
+
+### Feature Importance (Simulated)
+
+``` r
+# Simulate feature importance (as would come from Random Forest)
+set.seed(456)
+importance_df <- data.frame(
+  Band = paste0("Band_", 1:128),
+  Importance = abs(rnorm(128, mean = 0.02, sd = 0.015))
+)
+importance_df <- importance_df[order(-importance_df$Importance), ]
+importance_df$Rank <- 1:128
+
+# Plot top 20
+ggplot(importance_df[1:20, ], aes(x = reorder(Band, Importance), y = Importance)) +
+  geom_bar(stat = "identity", fill = "steelblue") +
+  coord_flip() +
+  labs(title = "Top 20 Most Important Embedding Bands",
+       subtitle = "Simulated Random Forest variable importance",
+       x = "Embedding Band", y = "Importance") +
+  theme_minimal()
+```
+
+![](machine-learning_files/figure-html/feature-importance-1.png)
 
 ## Download Cambridge Region Data
 

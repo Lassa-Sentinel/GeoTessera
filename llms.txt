@@ -204,12 +204,23 @@ This is an R port of the Python
   : Create Tile from GeoTIFF file
 - [`tile_from_npy()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_npy.md)
   : Create Tile from NPY files
+- [`tile_from_world()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_world.md)
+  : Convert world coordinates to tile coordinates
 - [`tile_from_zarr()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_zarr.md)
   : Create Tile from Zarr archive
+- [`tile_to_bounds()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_to_bounds.md)
+  : Get tile bounds from center coordinates
 - [`discover_tiles()`](https://lassa-sentinel.github.io/GeoTessera/reference/discover_tiles.md)
   : Discover tiles in a directory
 - [`discover_formats()`](https://lassa-sentinel.github.io/GeoTessera/reference/discover_formats.md)
   : Discover tiles by format
+
+## Coordinate Utilities
+
+- [`tile_from_world()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_world.md)
+  : Convert world coordinates to tile coordinates
+- [`tile_to_bounds()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_to_bounds.md)
+  : Get tile bounds from center coordinates
 
 ## Registry
 

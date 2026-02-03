@@ -26,8 +26,18 @@ Named list with tile_lon and tile_lat (center coordinates)
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
 tile_from_world(0.17, 52.23)  # Returns (0.15, 52.25)
-tile_from_world(-0.1, 51.3)   # Returns (-0.05, 51.35)
-} # }
+#> $tile_lon
+#> [1] 0.15
+#> 
+#> $tile_lat
+#> [1] 52.25
+#> 
+tile_from_world(-0.1, 51.3)   # Returns (-0.15, 51.25)
+#> $tile_lon
+#> [1] -0.05
+#> 
+#> $tile_lat
+#> [1] 51.35
+#> 
 ```

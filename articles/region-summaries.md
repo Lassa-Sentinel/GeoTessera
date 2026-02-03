@@ -19,7 +19,183 @@ administrative boundaries from a shapefile.
 ``` r
 library(GeoTessera)
 library(sf)
+library(ggplot2)
 ```
+
+## Demonstration with Simulated Data
+
+Before working with real data, let’s demonstrate the summarization
+workflow with simulated embeddings and regions.
+
+### Creating Example Regions
+
+``` r
+# Create 4 example polygon regions (simulating LGAs)
+region1 <- st_polygon(list(matrix(c(
+  0, 0, 1, 1, 0,
+  0, 1, 1, 0, 0
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region2 <- st_polygon(list(matrix(c(
+  1, 1, 2, 2, 1,
+  0, 1, 1, 0, 0
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region3 <- st_polygon(list(matrix(c(
+  0, 0, 1, 1, 0,
+  1, 2, 2, 1, 1
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+region4 <- st_polygon(list(matrix(c(
+  1, 1, 2, 2, 1,
+  1, 2, 2, 1, 1
+), ncol = 2))) |> st_sfc(crs = 4326)
+
+# Combine into sf object
+regions <- st_sf(
+  name = c("Region A", "Region B", "Region C", "Region D"),
+  land_type = c("urban", "agricultural", "forest", "mixed"),
+  geometry = c(region1, region2, region3, region4)
+)
+
+# Plot the regions
+ggplot(regions) +
+  geom_sf(aes(fill = land_type), alpha = 0.7) +
+  geom_sf_text(aes(label = name), size = 4) +
+  scale_fill_manual(values = c("urban" = "#E41A1C",
+                                "agricultural" = "#FFD92F",
+                                "forest" = "#4DAF4A",
+                                "mixed" = "#984EA3")) +
+  labs(title = "Example Administrative Regions",
+       subtitle = "Simulating 4 LGAs with different land cover types") +
+  theme_minimal()
+#> Warning in st_point_on_surface.sfc(sf::st_zm(x)): st_point_on_surface may not
+#> give correct results for longitude/latitude data
+```
+
+![](region-summaries_files/figure-html/demo-regions-1.png)
+
+### Simulating Region Embeddings
+
+``` r
+set.seed(42)
+
+# Simulate mean embeddings for each region type
+# Different land types have distinct embedding signatures
+simulate_embedding <- function(land_type) {
+  base <- switch(land_type,
+    "urban" = rnorm(128, mean = 0.5, sd = 0.1),
+    "agricultural" = rnorm(128, mean = 0.0, sd = 0.15),
+    "forest" = rnorm(128, mean = -0.4, sd = 0.12),
+    "mixed" = rnorm(128, mean = 0.1, sd = 0.2)
+  )
+  base
+}
+
+# Generate embeddings for each region
+region_embeddings <- lapply(regions$land_type, simulate_embedding)
+names(region_embeddings) <- regions$name
+
+# Create embedding matrix
+emb_matrix <- do.call(rbind, region_embeddings)
+rownames(emb_matrix) <- regions$name
+
+cat("Embedding matrix dimensions:", dim(emb_matrix), "\n")
+#> Embedding matrix dimensions: 4 128
+cat("Rows:", rownames(emb_matrix), "\n")
+#> Rows: Region A Region B Region C Region D
+```
+
+### Region Similarity Heatmap
+
+``` r
+# Calculate cosine similarity between regions
+cosine_sim <- function(a, b) {
+  sum(a * b) / (sqrt(sum(a^2)) * sqrt(sum(b^2)))
+}
+
+n_regions <- nrow(emb_matrix)
+sim_matrix <- matrix(0, n_regions, n_regions)
+for (i in 1:n_regions) {
+  for (j in 1:n_regions) {
+    sim_matrix[i, j] <- cosine_sim(emb_matrix[i, ], emb_matrix[j, ])
+  }
+}
+rownames(sim_matrix) <- colnames(sim_matrix) <- regions$name
+
+# Convert to data frame for plotting
+sim_df <- as.data.frame(as.table(sim_matrix))
+names(sim_df) <- c("Region1", "Region2", "Similarity")
+
+ggplot(sim_df, aes(x = Region1, y = Region2, fill = Similarity)) +
+  geom_tile() +
+  geom_text(aes(label = round(Similarity, 2)), color = "white", size = 4) +
+  scale_fill_gradient2(low = "blue", mid = "white", high = "red", midpoint = 0.5) +
+  labs(title = "Region Similarity Matrix",
+       subtitle = "Cosine similarity based on mean embeddings") +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+![](region-summaries_files/figure-html/similarity-heatmap-1.png)
+
+### Embedding Profile Comparison
+
+``` r
+# Compare first 20 dimensions across regions
+profile_df <- data.frame(
+  Dimension = rep(1:20, 4),
+  Value = c(emb_matrix[1, 1:20], emb_matrix[2, 1:20],
+            emb_matrix[3, 1:20], emb_matrix[4, 1:20]),
+  Region = rep(regions$name, each = 20)
+)
+
+ggplot(profile_df, aes(x = Dimension, y = Value, color = Region)) +
+  geom_line(linewidth = 1) +
+  geom_point(size = 2) +
+  scale_color_brewer(palette = "Set1") +
+  labs(title = "Embedding Profiles by Region",
+       subtitle = "First 20 of 128 dimensions shown",
+       x = "Embedding Dimension", y = "Value") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+![](region-summaries_files/figure-html/embedding-profiles-1.png)
+
+### Hierarchical Clustering of Regions
+
+``` r
+# Cluster regions by embedding similarity
+dist_matrix <- dist(emb_matrix)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# Simple dendrogram plot
+plot(hc, main = "Hierarchical Clustering of Regions",
+     sub = "Based on 128-dimensional embeddings",
+     xlab = "", ylab = "Distance")
+```
+
+![](region-summaries_files/figure-html/region-clustering-1.png)
+
+### Map with Cluster Assignment
+
+``` r
+# Cut tree into 2 clusters
+regions$cluster <- factor(cutree(hc, k = 2))
+
+ggplot(regions) +
+  geom_sf(aes(fill = cluster), alpha = 0.7) +
+  geom_sf_text(aes(label = paste0(name, "\n(", land_type, ")")), size = 3) +
+  scale_fill_brewer(palette = "Set2") +
+  labs(title = "Regions Clustered by Embedding Similarity",
+       subtitle = "Regions with similar land cover cluster together") +
+  theme_minimal()
+#> Warning in st_point_on_surface.sfc(sf::st_zm(x)): st_point_on_surface may not
+#> give correct results for longitude/latitude data
+```
+
+![](region-summaries_files/figure-html/cluster-map-1.png)
 
 ## Loading Administrative Boundaries
 

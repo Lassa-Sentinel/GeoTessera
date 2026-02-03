@@ -30,6 +30,173 @@ install.packages("path/to/GeoTessera", repos = NULL, type = "source")
 library(GeoTessera)
 ```
 
+## Coordinate System Demonstration
+
+Before diving into downloads, let’s demonstrate how GeoTessera’s
+coordinate system works. These examples run without network access.
+
+### Tile Coordinate Conversion
+
+GeoTessera tiles are 0.1° × 0.1° cells aligned to a global grid:
+
+``` r
+# Convert a world coordinate to its containing tile
+tile_coords <- tile_from_world(lon = 0.17, lat = 52.23)
+print(tile_coords)
+#> $tile_lon
+#> [1] 0.15
+#> 
+#> $tile_lat
+#> [1] 52.25
+# This point falls within tile (0.15, 52.25)
+
+# Get the bounds of that tile
+bounds <- tile_to_bounds(tile_coords$tile_lon, tile_coords$tile_lat)
+print(bounds)
+#> $xmin
+#> [1] 0.1
+#> 
+#> $ymin
+#> [1] 52.2
+#> 
+#> $xmax
+#> [1] 0.2
+#> 
+#> $ymax
+#> [1] 52.3
+# The tile covers lon: [0.15, 0.25), lat: [52.2, 52.3)
+```
+
+### Visualizing the Tile Grid
+
+``` r
+library(ggplot2)
+
+# Cambridge region bounding box
+cambridge <- data.frame(
+  xmin = 0.086174, ymin = 52.183432,
+ xmax = 0.151062, ymax = 52.206318
+)
+
+# Calculate which tiles cover this region
+tiles <- expand.grid(
+  tile_lon = seq(0.05, 0.15, by = 0.1),
+  tile_lat = seq(52.15, 52.25, by = 0.1)
+)
+
+# Create tile polygons
+tile_polys <- do.call(rbind, lapply(1:nrow(tiles), function(i) {
+  bounds <- tile_to_bounds(tiles$tile_lon[i], tiles$tile_lat[i])
+  data.frame(
+    tile = paste0("grid_", tiles$tile_lon[i], "_", tiles$tile_lat[i]),
+    x = c(bounds$xmin, bounds$xmax, bounds$xmax, bounds$xmin, bounds$xmin),
+    y = c(bounds$ymin, bounds$ymin, bounds$ymax, bounds$ymax, bounds$ymin)
+  )
+}))
+
+# Plot the tile grid with Cambridge bbox
+ggplot() +
+  geom_polygon(data = tile_polys, aes(x = x, y = y, group = tile),
+               fill = "lightblue", color = "darkblue", alpha = 0.3) +
+  geom_rect(data = cambridge,
+            aes(xmin = xmin, xmax = xmax, ymin = ymin, ymax = ymax),
+            fill = NA, color = "red", linewidth = 1.5) +
+  geom_text(data = tiles, aes(x = tile_lon + 0.05, y = tile_lat + 0.05,
+            label = paste0(tile_lon, ", ", tile_lat)),
+            size = 3) +
+  coord_fixed() +
+  labs(title = "GeoTessera Tile Grid",
+       subtitle = "Cambridge region (red box) spans 4 tiles",
+       x = "Longitude", y = "Latitude") +
+  theme_minimal()
+```
+
+![](getting-started_files/figure-html/tile-grid-viz-1.png)
+
+### Simulated Embedding Visualization
+
+Here’s what a single tile’s embeddings look like when visualized:
+
+``` r
+# Create simulated embedding data (128 channels, 100x100 pixels for speed)
+set.seed(42)
+n_pixels <- 100
+n_channels <- 128
+
+# Simulate smooth spatial patterns using simple gradients + noise
+x_grid <- matrix(rep(1:n_pixels, n_pixels), nrow = n_pixels, byrow = TRUE)
+y_grid <- matrix(rep(1:n_pixels, n_pixels), nrow = n_pixels, byrow = FALSE)
+
+# Create a 3-channel visualization (simulating first 3 embedding bands)
+band1 <- (x_grid / n_pixels + rnorm(n_pixels^2, 0, 0.1)) * 255
+band2 <- (y_grid / n_pixels + rnorm(n_pixels^2, 0, 0.1)) * 255
+band3 <- ((x_grid + y_grid) / (2 * n_pixels) + rnorm(n_pixels^2, 0, 0.1)) * 255
+
+# Clamp values
+band1 <- pmax(0, pmin(255, band1))
+band2 <- pmax(0, pmin(255, band2))
+band3 <- pmax(0, pmin(255, band3))
+
+# Create data frame for plotting
+sim_data <- data.frame(
+  x = rep(1:n_pixels, n_pixels),
+  y = rep(1:n_pixels, each = n_pixels),
+  Band1 = as.vector(band1),
+  Band2 = as.vector(band2),
+  Band3 = as.vector(band3)
+)
+
+# Reshape for faceted plot
+library(tidyr)
+sim_long <- pivot_longer(sim_data, cols = c(Band1, Band2, Band3),
+                          names_to = "band", values_to = "value")
+
+ggplot(sim_long, aes(x = x, y = y, fill = value)) +
+  geom_raster() +
+  facet_wrap(~band, ncol = 3) +
+  scale_fill_viridis_c() +
+  coord_fixed() +
+  labs(title = "Simulated Embedding Bands",
+       subtitle = "Each tile contains 128 such bands at 1111×1111 pixels",
+       x = "Pixel X", y = "Pixel Y") +
+  theme_minimal() +
+  theme(legend.position = "bottom")
+```
+
+![](getting-started_files/figure-html/simulated-embedding-viz-1.png)
+
+### Embedding Value Distribution
+
+``` r
+# Simulate what real embedding distributions look like
+set.seed(123)
+n_samples <- 1000
+
+# Embeddings typically have structured distributions per channel
+embedding_samples <- data.frame(
+  Channel = rep(paste0("Ch", 1:6), each = n_samples),
+  Value = c(
+    rnorm(n_samples, mean = -0.5, sd = 0.3),
+    rnorm(n_samples, mean = 0.2, sd = 0.5),
+    rnorm(n_samples, mean = 0.8, sd = 0.2),
+    rnorm(n_samples, mean = -0.1, sd = 0.4),
+    rnorm(n_samples, mean = 0.5, sd = 0.6),
+    rnorm(n_samples, mean = 0.0, sd = 0.25)
+  )
+)
+
+ggplot(embedding_samples, aes(x = Value, fill = Channel)) +
+  geom_density(alpha = 0.5) +
+  facet_wrap(~Channel, scales = "free_y") +
+  labs(title = "Embedding Value Distributions by Channel",
+       subtitle = "Each of 128 channels captures different features",
+       x = "Embedding Value", y = "Density") +
+  theme_minimal() +
+  theme(legend.position = "none")
+```
+
+![](getting-started_files/figure-html/embedding-distribution-1.png)
+
 ## Understanding the Data Structure
 
 Tessera data is organized hierarchically:

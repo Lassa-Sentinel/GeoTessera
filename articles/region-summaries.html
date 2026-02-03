@@ -79,14 +79,186 @@ administrative boundaries from a shapefile.</p>
 </h2>
 <div class="sourceCode" id="cb1"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/lassa_sentinel/GeoTessera" class="external-link">GeoTessera</a></span><span class="op">)</span></span>
-<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span></code></pre></div>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span>
+<span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://ggplot2.tidyverse.org" class="external-link">ggplot2</a></span><span class="op">)</span></span></code></pre></div>
+</div>
+<div class="section level2">
+<h2 id="demonstration-with-simulated-data">Demonstration with Simulated Data<a class="anchor" aria-label="anchor" href="#demonstration-with-simulated-data"></a>
+</h2>
+<p>Before working with real data, let’s demonstrate the summarization
+workflow with simulated embeddings and regions.</p>
+<div class="section level3">
+<h3 id="creating-example-regions">Creating Example Regions<a class="anchor" aria-label="anchor" href="#creating-example-regions"></a>
+</h3>
+<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Create 4 example polygon regions (simulating LGAs)</span></span>
+<span><span class="va">region1</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>  <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>,</span>
+<span>  <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">0</span></span>
+<span><span class="op">)</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span>crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">region2</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>  <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">1</span>,</span>
+<span>  <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>, <span class="fl">0</span></span>
+<span><span class="op">)</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span>crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">region3</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>  <span class="fl">0</span>, <span class="fl">0</span>, <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">0</span>,</span>
+<span>  <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span></span>
+<span><span class="op">)</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span>crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span></span>
+<span></span>
+<span><span class="va">region4</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st.html" class="external-link">st_polygon</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/list.html" class="external-link">list</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span></span>
+<span>  <span class="fl">1</span>, <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">1</span>,</span>
+<span>  <span class="fl">1</span>, <span class="fl">2</span>, <span class="fl">2</span>, <span class="fl">1</span>, <span class="fl">1</span></span>
+<span><span class="op">)</span>, ncol <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span> <span class="op">|&gt;</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sfc.html" class="external-link">st_sfc</a></span><span class="op">(</span>crs <span class="op">=</span> <span class="fl">4326</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Combine into sf object</span></span>
+<span><span class="va">regions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/sf.html" class="external-link">st_sf</a></span><span class="op">(</span></span>
+<span>  name <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Region A"</span>, <span class="st">"Region B"</span>, <span class="st">"Region C"</span>, <span class="st">"Region D"</span><span class="op">)</span>,</span>
+<span>  land_type <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"urban"</span>, <span class="st">"agricultural"</span>, <span class="st">"forest"</span>, <span class="st">"mixed"</span><span class="op">)</span>,</span>
+<span>  geometry <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">region1</span>, <span class="va">region2</span>, <span class="va">region3</span>, <span class="va">region4</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Plot the regions</span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">regions</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="va">land_type</span><span class="op">)</span>, alpha <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf_text</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>label <span class="op">=</span> <span class="va">name</span><span class="op">)</span>, size <span class="op">=</span> <span class="fl">4</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_manual.html" class="external-link">scale_fill_manual</a></span><span class="op">(</span>values <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"urban"</span> <span class="op">=</span> <span class="st">"#E41A1C"</span>,</span>
+<span>                                <span class="st">"agricultural"</span> <span class="op">=</span> <span class="st">"#FFD92F"</span>,</span>
+<span>                                <span class="st">"forest"</span> <span class="op">=</span> <span class="st">"#4DAF4A"</span>,</span>
+<span>                                <span class="st">"mixed"</span> <span class="op">=</span> <span class="st">"#984EA3"</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Example Administrative Regions"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Simulating 4 LGAs with different land cover types"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning in st_point_on_surface.sfc(sf::st_zm(x)): st_point_on_surface may not</span></span>
+<span><span class="co">#&gt; give correct results for longitude/latitude data</span></span></code></pre></div>
+<p><img src="region-summaries_files/figure-html/demo-regions-1.png" class="r-plt" alt="" width="576"></p>
+</div>
+<div class="section level3">
+<h3 id="simulating-region-embeddings">Simulating Region Embeddings<a class="anchor" aria-label="anchor" href="#simulating-region-embeddings"></a>
+</h3>
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Simulate mean embeddings for each region type</span></span>
+<span><span class="co"># Different land types have distinct embedding signatures</span></span>
+<span><span class="va">simulate_embedding</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">land_type</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="va">base</span> <span class="op">&lt;-</span> <span class="kw"><a href="https://rdrr.io/r/base/switch.html" class="external-link">switch</a></span><span class="op">(</span><span class="va">land_type</span>,</span>
+<span>    <span class="st">"urban"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">128</span>, mean <span class="op">=</span> <span class="fl">0.5</span>, sd <span class="op">=</span> <span class="fl">0.1</span><span class="op">)</span>,</span>
+<span>    <span class="st">"agricultural"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">128</span>, mean <span class="op">=</span> <span class="fl">0.0</span>, sd <span class="op">=</span> <span class="fl">0.15</span><span class="op">)</span>,</span>
+<span>    <span class="st">"forest"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">128</span>, mean <span class="op">=</span> <span class="op">-</span><span class="fl">0.4</span>, sd <span class="op">=</span> <span class="fl">0.12</span><span class="op">)</span>,</span>
+<span>    <span class="st">"mixed"</span> <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/stats/Normal.html" class="external-link">rnorm</a></span><span class="op">(</span><span class="fl">128</span>, mean <span class="op">=</span> <span class="fl">0.1</span>, sd <span class="op">=</span> <span class="fl">0.2</span><span class="op">)</span></span>
+<span>  <span class="op">)</span></span>
+<span>  <span class="va">base</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="co"># Generate embeddings for each region</span></span>
+<span><span class="va">region_embeddings</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/lapply.html" class="external-link">lapply</a></span><span class="op">(</span><span class="va">regions</span><span class="op">$</span><span class="va">land_type</span>, <span class="va">simulate_embedding</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">region_embeddings</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">regions</span><span class="op">$</span><span class="va">name</span></span>
+<span></span>
+<span><span class="co"># Create embedding matrix</span></span>
+<span><span class="va">emb_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">region_embeddings</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">regions</span><span class="op">$</span><span class="va">name</span></span>
+<span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Embedding matrix dimensions:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/dim.html" class="external-link">dim</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Embedding matrix dimensions: 4 128</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/cat.html" class="external-link">cat</a></span><span class="op">(</span><span class="st">"Rows:"</span>, <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">)</span>, <span class="st">"\n"</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Rows: Region A Region B Region C Region D</span></span></code></pre></div>
+</div>
+<div class="section level3">
+<h3 id="region-similarity-heatmap">Region Similarity Heatmap<a class="anchor" aria-label="anchor" href="#region-similarity-heatmap"></a>
+</h3>
+<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Calculate cosine similarity between regions</span></span>
+<span><span class="va">cosine_sim</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">a</span>, <span class="va">b</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">a</span> <span class="op">*</span> <span class="va">b</span><span class="op">)</span> <span class="op">/</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">a</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span> <span class="op">*</span> <span class="fu"><a href="https://rdrr.io/r/base/MathFun.html" class="external-link">sqrt</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/sum.html" class="external-link">sum</a></span><span class="op">(</span><span class="va">b</span><span class="op">^</span><span class="fl">2</span><span class="op">)</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="op">}</span></span>
+<span></span>
+<span><span class="va">n_regions</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/dimensions.html" class="external-link">nrow</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">)</span></span>
+<span><span class="va">sim_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/matrix.html" class="external-link">matrix</a></span><span class="op">(</span><span class="fl">0</span>, <span class="va">n_regions</span>, <span class="va">n_regions</span><span class="op">)</span></span>
+<span><span class="kw">for</span> <span class="op">(</span><span class="va">i</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="va">n_regions</span><span class="op">)</span> <span class="op">{</span></span>
+<span>  <span class="kw">for</span> <span class="op">(</span><span class="va">j</span> <span class="kw">in</span> <span class="fl">1</span><span class="op">:</span><span class="va">n_regions</span><span class="op">)</span> <span class="op">{</span></span>
+<span>    <span class="va">sim_matrix</span><span class="op">[</span><span class="va">i</span>, <span class="va">j</span><span class="op">]</span> <span class="op">&lt;-</span> <span class="fu">cosine_sim</span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">[</span><span class="va">i</span>, <span class="op">]</span>, <span class="va">emb_matrix</span><span class="op">[</span><span class="va">j</span>, <span class="op">]</span><span class="op">)</span></span>
+<span>  <span class="op">}</span></span>
+<span><span class="op">}</span></span>
+<span><span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">rownames</a></span><span class="op">(</span><span class="va">sim_matrix</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/colnames.html" class="external-link">colnames</a></span><span class="op">(</span><span class="va">sim_matrix</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="va">regions</span><span class="op">$</span><span class="va">name</span></span>
+<span></span>
+<span><span class="co"># Convert to data frame for plotting</span></span>
+<span><span class="va">sim_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/as.data.frame.html" class="external-link">as.data.frame</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/table.html" class="external-link">as.table</a></span><span class="op">(</span><span class="va">sim_matrix</span><span class="op">)</span><span class="op">)</span></span>
+<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/names.html" class="external-link">names</a></span><span class="op">(</span><span class="va">sim_df</span><span class="op">)</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Region1"</span>, <span class="st">"Region2"</span>, <span class="st">"Similarity"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">sim_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">Region1</span>, y <span class="op">=</span> <span class="va">Region2</span>, fill <span class="op">=</span> <span class="va">Similarity</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_tile.html" class="external-link">geom_tile</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_text.html" class="external-link">geom_text</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>label <span class="op">=</span> <span class="fu"><a href="https://rspatial.github.io/terra/reference/math-generics.html" class="external-link">round</a></span><span class="op">(</span><span class="va">Similarity</span>, <span class="fl">2</span><span class="op">)</span><span class="op">)</span>, color <span class="op">=</span> <span class="st">"white"</span>, size <span class="op">=</span> <span class="fl">4</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_gradient.html" class="external-link">scale_fill_gradient2</a></span><span class="op">(</span>low <span class="op">=</span> <span class="st">"blue"</span>, mid <span class="op">=</span> <span class="st">"white"</span>, high <span class="op">=</span> <span class="st">"red"</span>, midpoint <span class="op">=</span> <span class="fl">0.5</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Region Similarity Matrix"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Cosine similarity based on mean embeddings"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>axis.text.x <span class="op">=</span> <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/element.html" class="external-link">element_text</a></span><span class="op">(</span>angle <span class="op">=</span> <span class="fl">45</span>, hjust <span class="op">=</span> <span class="fl">1</span><span class="op">)</span><span class="op">)</span></span></code></pre></div>
+<p><img src="region-summaries_files/figure-html/similarity-heatmap-1.png" class="r-plt" alt="" width="576"></p>
+</div>
+<div class="section level3">
+<h3 id="embedding-profile-comparison">Embedding Profile Comparison<a class="anchor" aria-label="anchor" href="#embedding-profile-comparison"></a>
+</h3>
+<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Compare first 20 dimensions across regions</span></span>
+<span><span class="va">profile_df</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
+<span>  Dimension <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="fl">1</span><span class="op">:</span><span class="fl">20</span>, <span class="fl">4</span><span class="op">)</span>,</span>
+<span>  Value <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">[</span><span class="fl">1</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">20</span><span class="op">]</span>, <span class="va">emb_matrix</span><span class="op">[</span><span class="fl">2</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">20</span><span class="op">]</span>,</span>
+<span>            <span class="va">emb_matrix</span><span class="op">[</span><span class="fl">3</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">20</span><span class="op">]</span>, <span class="va">emb_matrix</span><span class="op">[</span><span class="fl">4</span>, <span class="fl">1</span><span class="op">:</span><span class="fl">20</span><span class="op">]</span><span class="op">)</span>,</span>
+<span>  Region <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/rep.html" class="external-link">rep</a></span><span class="op">(</span><span class="va">regions</span><span class="op">$</span><span class="va">name</span>, each <span class="op">=</span> <span class="fl">20</span><span class="op">)</span></span>
+<span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">profile_df</span>, <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>x <span class="op">=</span> <span class="va">Dimension</span>, y <span class="op">=</span> <span class="va">Value</span>, color <span class="op">=</span> <span class="va">Region</span><span class="op">)</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_path.html" class="external-link">geom_line</a></span><span class="op">(</span>linewidth <span class="op">=</span> <span class="fl">1</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/geom_point.html" class="external-link">geom_point</a></span><span class="op">(</span>size <span class="op">=</span> <span class="fl">2</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_color_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set1"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Embedding Profiles by Region"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"First 20 of 128 dimensions shown"</span>,</span>
+<span>       x <span class="op">=</span> <span class="st">"Embedding Dimension"</span>, y <span class="op">=</span> <span class="st">"Value"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/theme.html" class="external-link">theme</a></span><span class="op">(</span>legend.position <span class="op">=</span> <span class="st">"bottom"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="region-summaries_files/figure-html/embedding-profiles-1.png" class="r-plt" alt="" width="672"></p>
+</div>
+<div class="section level3">
+<h3 id="hierarchical-clustering-of-regions">Hierarchical Clustering of Regions<a class="anchor" aria-label="anchor" href="#hierarchical-clustering-of-regions"></a>
+</h3>
+<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Cluster regions by embedding similarity</span></span>
+<span><span class="va">dist_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/dist.html" class="external-link">dist</a></span><span class="op">(</span><span class="va">emb_matrix</span><span class="op">)</span></span>
+<span><span class="va">hc</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/stats/hclust.html" class="external-link">hclust</a></span><span class="op">(</span><span class="va">dist_matrix</span>, method <span class="op">=</span> <span class="st">"ward.D2"</span><span class="op">)</span></span>
+<span></span>
+<span><span class="co"># Simple dendrogram plot</span></span>
+<span><span class="fu"><a href="https://rspatial.github.io/terra/reference/plot.html" class="external-link">plot</a></span><span class="op">(</span><span class="va">hc</span>, main <span class="op">=</span> <span class="st">"Hierarchical Clustering of Regions"</span>,</span>
+<span>     sub <span class="op">=</span> <span class="st">"Based on 128-dimensional embeddings"</span>,</span>
+<span>     xlab <span class="op">=</span> <span class="st">""</span>, ylab <span class="op">=</span> <span class="st">"Distance"</span><span class="op">)</span></span></code></pre></div>
+<p><img src="region-summaries_files/figure-html/region-clustering-1.png" class="r-plt" alt="" width="576"></p>
+</div>
+<div class="section level3">
+<h3 id="map-with-cluster-assignment">Map with Cluster Assignment<a class="anchor" aria-label="anchor" href="#map-with-cluster-assignment"></a>
+</h3>
+<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<code class="sourceCode R"><span><span class="co"># Cut tree into 2 clusters</span></span>
+<span><span class="va">regions</span><span class="op">$</span><span class="va">cluster</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/factor.html" class="external-link">factor</a></span><span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/stats/cutree.html" class="external-link">cutree</a></span><span class="op">(</span><span class="va">hc</span>, k <span class="op">=</span> <span class="fl">2</span><span class="op">)</span><span class="op">)</span></span>
+<span></span>
+<span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggplot.html" class="external-link">ggplot</a></span><span class="op">(</span><span class="va">regions</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>fill <span class="op">=</span> <span class="va">cluster</span><span class="op">)</span>, alpha <span class="op">=</span> <span class="fl">0.7</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggsf.html" class="external-link">geom_sf_text</a></span><span class="op">(</span><span class="fu"><a href="https://ggplot2.tidyverse.org/reference/aes.html" class="external-link">aes</a></span><span class="op">(</span>label <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/paste.html" class="external-link">paste0</a></span><span class="op">(</span><span class="va">name</span>, <span class="st">"\n("</span>, <span class="va">land_type</span>, <span class="st">")"</span><span class="op">)</span><span class="op">)</span>, size <span class="op">=</span> <span class="fl">3</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/scale_brewer.html" class="external-link">scale_fill_brewer</a></span><span class="op">(</span>palette <span class="op">=</span> <span class="st">"Set2"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html" class="external-link">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">"Regions Clustered by Embedding Similarity"</span>,</span>
+<span>       subtitle <span class="op">=</span> <span class="st">"Regions with similar land cover cluster together"</span><span class="op">)</span> <span class="op">+</span></span>
+<span>  <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html" class="external-link">theme_minimal</a></span><span class="op">(</span><span class="op">)</span></span>
+<span><span class="co">#&gt; Warning in st_point_on_surface.sfc(sf::st_zm(x)): st_point_on_surface may not</span></span>
+<span><span class="co">#&gt; give correct results for longitude/latitude data</span></span></code></pre></div>
+<p><img src="region-summaries_files/figure-html/cluster-map-1.png" class="r-plt" alt="" width="576"></p>
+</div>
 </div>
 <div class="section level2">
 <h2 id="loading-administrative-boundaries">Loading Administrative Boundaries<a class="anchor" aria-label="anchor" href="#loading-administrative-boundaries"></a>
 </h2>
 <p>We’ll use Nigeria’s Local Government Areas (LGAs) as an example. This
 shapefile contains 774 administrative units at the admin2 level.</p>
-<div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Load the shapefile</span></span>
 <span><span class="va">nigeria_lgas</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_read.html" class="external-link">st_read</a></span><span class="op">(</span><span class="st">"shapefiles/nigeria_admin2_shapefile.shp"</span>, quiet <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span></span>
 <span></span>
@@ -105,7 +277,7 @@ shapefile contains 774 administrative units at the admin2 level.</p>
 </h2>
 <p>Let’s compute embedding summaries for Aba North, a small LGA in
 southeastern Nigeria.</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Select Aba North LGA</span></span>
 <span><span class="va">aba_north</span> <span class="op">&lt;-</span> <span class="va">nigeria_lgas</span><span class="op">[</span><span class="va">nigeria_lgas</span><span class="op">$</span><span class="va">adminName</span> <span class="op">==</span> <span class="st">"Aba North"</span>, <span class="op">]</span></span>
 <span></span>
@@ -121,7 +293,7 @@ directly. It will:</p>
 <li>Mask pixels outside the polygon boundary</li>
 <li>Compute summary statistics</li>
 </ul>
-<div class="sourceCode" id="cb5"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create GeoTessera client</span></span>
 <span><span class="va">gt</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/GeoTessera.html">geotessera</a></span><span class="op">(</span><span class="op">)</span></span>
 <span></span>
@@ -154,7 +326,7 @@ directly. It will:</p>
 </h3>
 <p>By default, <code>summarize_region()</code> computes three
 summaries:</p>
-<div class="sourceCode" id="cb6"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Mean embedding (128-dimensional vector)</span></span>
 <span><span class="va">mean_embedding</span> <span class="op">&lt;-</span> <span class="va">result</span><span class="op">$</span><span class="va">summaries</span><span class="op">$</span><span class="va">mean</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">mean_embedding</span><span class="op">)</span></span>
@@ -223,7 +395,7 @@ ones.</p>
 </tr>
 </tbody>
 </table>
-<div class="sourceCode" id="cb7"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb13"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Use specific summary functions</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">gt</span><span class="op">$</span><span class="fu">summarize_region</span><span class="op">(</span></span>
 <span>  region <span class="op">=</span> <span class="va">aba_north</span>,</span>
@@ -245,7 +417,7 @@ ones.</p>
 </h3>
 <p>Use <code><a href="../reference/summary_quantile.html">summary_quantile()</a></code> to create a function that
 computes specific quantiles:</p>
-<div class="sourceCode" id="cb8"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create a function for 10th and 90th percentiles</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">gt</span><span class="op">$</span><span class="fu">summarize_region</span><span class="op">(</span></span>
 <span>  region <span class="op">=</span> <span class="va">aba_north</span>,</span>
@@ -263,7 +435,7 @@ computes specific quantiles:</p>
 </h3>
 <p>Use <code><a href="../reference/summary_random_sample.html">summary_random_sample()</a></code> to extract random pixel
 embeddings:</p>
-<div class="sourceCode" id="cb9"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Sample 50 random pixels (reproducible with seed)</span></span>
 <span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">gt</span><span class="op">$</span><span class="fu">summarize_region</span><span class="op">(</span></span>
 <span>  region <span class="op">=</span> <span class="va">aba_north</span>,</span>
@@ -290,7 +462,7 @@ embeddings:</p>
 <li>
 <code>tiles_df</code>: Tile metadata data frame</li>
 </ul>
-<div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Custom function: compute the embedding at the pixel with maximum brightness</span></span>
 <span><span class="co"># (using sum across channels as a proxy for "brightness")</span></span>
 <span><span class="va">summary_max_brightness</span> <span class="op">&lt;-</span> <span class="kw">function</span><span class="op">(</span><span class="va">embeddings</span>, <span class="va">region</span> <span class="op">=</span> <span class="cn">NULL</span>, <span class="va">tiles_df</span> <span class="op">=</span> <span class="cn">NULL</span><span class="op">)</span> <span class="op">{</span></span>
@@ -352,7 +524,7 @@ regardless of region size</li>
 <div class="section level3">
 <h3 id="efficient-multi-region-processing">Efficient Multi-Region Processing<a class="anchor" aria-label="anchor" href="#efficient-multi-region-processing"></a>
 </h3>
-<div class="sourceCode" id="cb11"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Select adjacent LGAs that share tiles</span></span>
 <span><span class="va">selected_lgas</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"Aba North"</span>, <span class="st">"Aba South"</span>, <span class="st">"Osisioma Ngwa"</span>, <span class="st">"Ugwunagbo"</span><span class="op">)</span></span>
 <span><span class="va">lgas_subset</span> <span class="op">&lt;-</span> <span class="va">nigeria_lgas</span><span class="op">[</span><span class="va">nigeria_lgas</span><span class="op">$</span><span class="va">adminName</span> <span class="op"><a href="https://rspatial.github.io/terra/reference/match.html" class="external-link">%in%</a></span> <span class="va">selected_lgas</span>, <span class="op">]</span></span>
@@ -391,7 +563,7 @@ region</li>
 <li>
 <code>metadata</code>: Processing statistics</li>
 </ul>
-<div class="sourceCode" id="cb12"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Access results for a specific region</span></span>
 <span><span class="va">aba_north_embedding</span> <span class="op">&lt;-</span> <span class="va">result</span><span class="op">$</span><span class="va">summaries</span><span class="op">[[</span><span class="st">"Aba North"</span><span class="op">]</span><span class="op">]</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/length.html" class="external-link">length</a></span><span class="op">(</span><span class="va">aba_north_embedding</span><span class="op">)</span></span>
@@ -427,7 +599,7 @@ Optimized streaming (summarize_regions_streaming):
 </h3>
 <p>For processing many regions (e.g., all LGAs in a country), use
 sampling to reduce processing time:</p>
-<div class="sourceCode" id="cb14"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Process all LGAs in a state</span></span>
 <span><span class="va">abia_lgas</span> <span class="op">&lt;-</span> <span class="va">nigeria_lgas</span><span class="op">[</span><span class="fu"><a href="https://rdrr.io/r/base/grep.html" class="external-link">grepl</a></span><span class="op">(</span><span class="st">"^NG001"</span>, <span class="va">nigeria_lgas</span><span class="op">$</span><span class="va">adminCode</span><span class="op">)</span>, <span class="op">]</span></span>
 <span></span>
@@ -444,7 +616,7 @@ sampling to reduce processing time:</p>
 <h3 id="creating-a-summary-data-frame">Creating a Summary Data Frame<a class="anchor" aria-label="anchor" href="#creating-a-summary-data-frame"></a>
 </h3>
 <p>Combine embeddings with administrative metadata:</p>
-<div class="sourceCode" id="cb15"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Create data frame with LGA info and embeddings</span></span>
 <span><span class="va">embedding_matrix</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/do.call.html" class="external-link">do.call</a></span><span class="op">(</span><span class="va">rbind</span>, <span class="va">result</span><span class="op">$</span><span class="va">summaries</span><span class="op">)</span></span>
 <span><span class="va">lga_embeddings</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/data.frame.html" class="external-link">data.frame</a></span><span class="op">(</span></span>
@@ -465,7 +637,7 @@ sampling to reduce processing time:</p>
 <p>By default, pixels outside the region boundary are masked (set to
 NA). You can disable this to include all pixels within the bounding
 box:</p>
-<div class="sourceCode" id="cb16"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Without masking - uses rectangular bounding box</span></span>
 <span><span class="va">result_unmasked</span> <span class="op">&lt;-</span> <span class="va">gt</span><span class="op">$</span><span class="fu">summarize_region</span><span class="op">(</span></span>
 <span>  region <span class="op">=</span> <span class="va">aba_north</span>,</span>
@@ -489,7 +661,7 @@ box:</p>
 <h2 id="using-bounding-boxes">Using Bounding Boxes<a class="anchor" aria-label="anchor" href="#using-bounding-boxes"></a>
 </h2>
 <p>You can also use simple bounding boxes instead of sf objects:</p>
-<div class="sourceCode" id="cb17"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb23"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Define a bounding box (xmin, ymin, xmax, ymax)</span></span>
 <span><span class="va">bbox</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">7.33</span>, <span class="fl">5.08</span>, <span class="fl">7.40</span>, <span class="fl">5.14</span><span class="op">)</span></span>
 <span></span>
@@ -511,7 +683,7 @@ box:</p>
 <p>Downloaded tiles are stored in a temporary directory and
 automatically cleaned up when <code>summarize_region()</code> completes.
 If you need to keep the tiles:</p>
-<div class="sourceCode" id="cb18"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb24"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">result</span> <span class="op">&lt;-</span> <span class="va">gt</span><span class="op">$</span><span class="fu">summarize_region</span><span class="op">(</span></span>
 <span>  region <span class="op">=</span> <span class="va">aba_north</span>,</span>
 <span>  year <span class="op">=</span> <span class="fl">2024</span>,</span>
@@ -534,7 +706,7 @@ If you need to keep the tiles:</p>
 all embeddings before computing statistics.</p>
 <p>Use <code>summarize_region_streaming()</code> for memory-efficient
 processing of large single regions:</p>
-<div class="sourceCode" id="cb19"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb25"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Abaji LGA requires 36 tiles - too large for standard approach</span></span>
 <span><span class="va">abaji</span> <span class="op">&lt;-</span> <span class="va">nigeria_lgas</span><span class="op">[</span><span class="va">nigeria_lgas</span><span class="op">$</span><span class="va">adminName</span> <span class="op">==</span> <span class="st">"Abaji"</span>, <span class="op">]</span></span>
 <span></span>
@@ -569,7 +741,7 @@ Welford’s online algorithm</li>
 </h3>
 <p>Another memory-efficient approach is to sample random points within
 the polygon and fetch their embeddings:</p>
-<div class="sourceCode" id="cb20"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Sample 1000 random points inside the polygon</span></span>
 <span><span class="fu"><a href="https://rdrr.io/r/base/Random.html" class="external-link">set.seed</a></span><span class="op">(</span><span class="fl">42</span><span class="op">)</span></span>
 <span><span class="va">sample_points</span> <span class="op">&lt;-</span> <span class="fu"><a href="https://r-spatial.github.io/sf/reference/st_sample.html" class="external-link">st_sample</a></span><span class="op">(</span><span class="va">abaji</span>, size <span class="op">=</span> <span class="fl">1000</span><span class="op">)</span></span>
@@ -589,7 +761,7 @@ the polygon and fetch their embeddings:</p>
 <p>Here’s a complete example that clusters Nigerian LGAs based on
 embedding similarity, using the optimized multi-region streaming
 approach:</p>
-<div class="sourceCode" id="cb21"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://github.com/lassa_sentinel/GeoTessera" class="external-link">GeoTessera</a></span><span class="op">)</span></span>
 <span><span class="kw"><a href="https://rdrr.io/r/base/library.html" class="external-link">library</a></span><span class="op">(</span><span class="va"><a href="https://r-spatial.github.io/sf/" class="external-link">sf</a></span><span class="op">)</span></span>
 <span></span>
