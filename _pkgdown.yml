@@ -11,6 +11,7 @@ navbar:
     github:
       icon: fa-github
       href: https://github.com/Lassa-Sentinel/GeoTessera
+      aria-label: GitHub
 
 articles:
 - title: Getting Started
@@ -36,17 +37,24 @@ reference:
   - Tile
   - starts_with("tile_")
   - discover_tiles
+  - discover_formats
 - title: Registry
   contents:
   - Registry
+  - get_cache_dir
 - title: Visualization
   contents:
+  - visualization
   - visualize_global_coverage
   - create_rgb_mosaic
   - create_pca_mosaic
   - plot_embedding_bands
+  - analyze_geotiff_coverage
+  - calculate_bbox_from_file
+  - create_coverage_summary
 - title: Country Lookup
   contents:
+  - country
   - CountryLookup
   - get_country_bbox
   - find_country_for_point
