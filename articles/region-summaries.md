@@ -1,0 +1,551 @@
+# Summarizing Embeddings for Administrative Regions
+
+## Introduction
+
+When working with large geographic regions, you often need summary
+statistics rather than full pixel-level embeddings. The
+`summarize_region()` method provides a pipeline that:
+
+1.  Downloads embeddings to a temporary location
+2.  Optionally masks pixels to match irregular region boundaries
+3.  Computes user-specified summary statistics
+4.  Automatically cleans up downloaded data
+
+This vignette demonstrates how to use this functionality with
+administrative boundaries from a shapefile.
+
+## Setup
+
+``` r
+library(GeoTessera)
+library(sf)
+```
+
+## Loading Administrative Boundaries
+
+We’ll use Nigeria’s Local Government Areas (LGAs) as an example. This
+shapefile contains 774 administrative units at the admin2 level.
+
+``` r
+# Load the shapefile
+nigeria_lgas <- st_read("shapefiles/nigeria_admin2_shapefile.shp", quiet = TRUE)
+
+# Examine the structure
+print(nigeria_lgas[1:5, c("adminCode", "adminName")])
+```
+
+    Simple feature collection with 5 features and 2 fields
+      adminCode      adminName                       geometry
+    1  NG001001      Aba North MULTIPOLYGON (((7.401109 5....
+    2  NG001002      Aba South MULTIPOLYGON (((7.387495 5....
+    3  NG015001          Abaji MULTIPOLYGON (((7.045872 9....
+    4  NG003001           Abak MULTIPOLYGON (((7.811244 5....
+    5  NG011001      Abakaliki MULTIPOLYGON (((8.4109 6.28...
+
+## Summarizing a Single LGA
+
+Let’s compute embedding summaries for Aba North, a small LGA in
+southeastern Nigeria.
+
+``` r
+# Select Aba North LGA
+aba_north <- nigeria_lgas[nigeria_lgas$adminName == "Aba North", ]
+
+# View the region
+plot(st_geometry(aba_north), main = "Aba North LGA", col = "lightblue")
+```
+
+### Basic Summary
+
+The `summarize_region()` method accepts an sf object directly. It will:
+
+- Use the bounding box to determine which tiles to download
+- Mask pixels outside the polygon boundary
+- Compute summary statistics
+
+``` r
+# Create GeoTessera client
+gt <- geotessera()
+
+# Compute summaries for Aba North
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024
+)
+
+# View the structure
+names(result)
+# [1] "summaries" "metadata"
+
+# View metadata
+result$metadata
+# $region_bbox
+# [1]  7.331234  5.081948  7.402708  5.134542
+#
+# $year
+# [1] 2024
+#
+# $n_tiles
+# [1] 4
+#
+# $is_masked
+# [1] TRUE
+```
+
+### Default Summary Statistics
+
+By default, `summarize_region()` computes three summaries:
+
+``` r
+# Mean embedding (128-dimensional vector)
+mean_embedding <- result$summaries$mean
+length(mean_embedding)
+# [1] 128
+
+# First 10 dimensions
+head(mean_embedding, 10)
+
+# Centroid embedding (sampled at geographic center)
+centroid_embedding <- result$summaries$centroid
+length(centroid_embedding)
+# [1] 128
+
+# Coverage statistics
+result$summaries$coverage
+# n_tiles    n_valid_pixels n_total_pixels coverage_percent
+#       4           xxxxx          xxxxx            xx.xx
+```
+
+## Custom Summary Functions
+
+You can specify which summary functions to use, including custom ones.
+
+### Built-in Summary Functions
+
+GeoTessera provides several built-in summary functions:
+
+| Function                         | Description                      |
+|----------------------------------|----------------------------------|
+| `summary_mean`                   | Mean across all pixels           |
+| `summary_median`                 | Median across all pixels         |
+| `summary_sd`                     | Standard deviation per dimension |
+| `summary_centroid`               | Sample at geographic centroid    |
+| `summary_pixel_count`            | Count of valid/total pixels      |
+| `summary_coverage`               | Coverage statistics              |
+| `summary_quantile(probs)`        | Factory for quantile summaries   |
+| `summary_random_sample(n, seed)` | Factory for random sampling      |
+
+``` r
+# Use specific summary functions
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  summary_fns = list(
+    mean = summary_mean,
+    median = summary_median,
+    sd = summary_sd,
+    coverage = summary_coverage
+  )
+)
+
+# Standard deviation tells us about embedding variability
+sd_embedding <- result$summaries$sd
+summary(sd_embedding)
+```
+
+### Quantile Summaries
+
+Use
+[`summary_quantile()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_quantile.md)
+to create a function that computes specific quantiles:
+
+``` r
+# Create a function for 10th and 90th percentiles
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  summary_fns = list(
+    q10_90 = summary_quantile(c(0.10, 0.90))
+  )
+)
+
+# Returns 256 values (128 dimensions × 2 quantiles)
+length(result$summaries$q10_90)
+```
+
+### Random Sampling
+
+Use
+[`summary_random_sample()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_random_sample.md)
+to extract random pixel embeddings:
+
+``` r
+# Sample 50 random pixels (reproducible with seed)
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  summary_fns = list(
+    samples = summary_random_sample(n = 50, seed = 42)
+  )
+)
+
+# Returns a matrix: 50 samples × 128 dimensions
+dim(result$summaries$samples)
+# [1]  50 128
+```
+
+### Custom Summary Functions
+
+Create your own summary function. It should accept:
+
+- `embeddings`: List of 3D arrays (height × width × 128)
+- `region`: The input region (sf object or bbox)
+- `tiles_df`: Tile metadata data frame
+
+``` r
+# Custom function: compute the embedding at the pixel with maximum brightness
+# (using sum across channels as a proxy for "brightness")
+summary_max_brightness <- function(embeddings, region = NULL, tiles_df = NULL) {
+  max_sum <- -Inf
+  max_embedding <- NULL
+
+  for (emb in embeddings) {
+    # Sum across channels for each pixel
+    pixel_sums <- apply(emb, c(1, 2), sum, na.rm = TRUE)
+
+    # Find max
+    max_idx <- which.max(pixel_sums)
+    if (pixel_sums[max_idx] > max_sum) {
+      max_sum <- pixel_sums[max_idx]
+      # Convert linear index to array indices
+      idx <- arrayInd(max_idx, dim(pixel_sums))
+      max_embedding <- emb[idx[1], idx[2], ]
+    }
+  }
+
+  names(max_embedding) <- paste0("dim_", seq_along(max_embedding))
+  max_embedding
+}
+
+# Use the custom function
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  summary_fns = list(
+    mean = summary_mean,
+    max_brightness = summary_max_brightness
+  )
+)
+```
+
+## Processing Multiple Regions
+
+When processing multiple regions, adjacent areas often share tiles.
+GeoTessera provides an optimized
+[`summarize_regions_streaming()`](https://lassa-sentinel.github.io/GeoTessera/reference/summarize_regions_streaming.md)
+function that:
+
+1.  **Builds a region-to-tile mapping** - identifies which tiles each
+    region needs
+2.  **Detects shared tiles** - finds tiles used by multiple regions
+3.  **Optimizes download order** - processes most-shared tiles first
+4.  **Downloads each tile only once** - even if multiple regions need it
+5.  **Uses streaming statistics** - constant memory regardless of region
+    size
+
+### Efficient Multi-Region Processing
+
+``` r
+# Select adjacent LGAs that share tiles
+selected_lgas <- c("Aba North", "Aba South", "Osisioma Ngwa", "Ugwunagbo")
+lgas_subset <- nigeria_lgas[nigeria_lgas$adminName %in% selected_lgas, ]
+
+# Process all regions efficiently
+result <- summarize_regions_streaming(
+
+  gt = gt,
+  regions = lgas_subset,
+  year = 2024,
+  region_ids = lgas_subset$adminName,
+  sample_rate = 0.1,      # Sample 10% of pixels for speed
+  mask_to_region = TRUE   # Only include pixels inside each polygon
+)
+
+# View optimization statistics
+result$metadata
+# $n_regions
+# [1] 4
+#
+# $n_unique_tiles
+# [1] 11
+#
+# $tiles_downloaded
+# [1] 11
+#
+# (4 tiles were shared between regions - downloaded only once!)
+```
+
+The function returns:
+
+- `summaries`: Named list of mean embeddings (128-dim vector per region)
+- `pixel_counts`: Number of pixels processed per region
+- `metadata`: Processing statistics
+
+``` r
+# Access results for a specific region
+aba_north_embedding <- result$summaries[["Aba North"]]
+length(aba_north_embedding)
+# [1] 128
+
+# View pixel counts
+result$pixel_counts
+#     Aba North     Aba South Osisioma Ngwa     Ugwunagbo
+#         18800         43538        175735        126769
+
+# Combine into a matrix for analysis
+embedding_matrix <- do.call(rbind, result$summaries)
+dim(embedding_matrix)
+# [1]   4 128
+```
+
+### Comparison: Sequential vs Optimized
+
+For adjacent regions, the optimized approach is significantly faster:
+
+    Sequential processing (4 LGAs separately):
+      - Each LGA downloads its own tiles
+      - Shared tiles downloaded multiple times
+      - Total: ~20+ tile downloads
+
+    Optimized streaming (summarize_regions_streaming):
+      - Builds tile sharing graph
+      - Downloads each unique tile once
+      - Total: 11 tile downloads (4 shared)
+
+### Large-Scale Processing
+
+For processing many regions (e.g., all LGAs in a country), use sampling
+to reduce processing time:
+
+``` r
+# Process all LGAs in a state
+abia_lgas <- nigeria_lgas[grepl("^NG001", nigeria_lgas$adminCode), ]
+
+result <- summarize_regions_streaming(
+  gt = gt,
+  regions = abia_lgas,
+  year = 2024,
+  region_ids = abia_lgas$adminName,
+  sample_rate = 0.05,     # 5% sampling for very large jobs
+  mask_to_region = TRUE
+)
+```
+
+### Creating a Summary Data Frame
+
+Combine embeddings with administrative metadata:
+
+``` r
+# Create data frame with LGA info and embeddings
+embedding_matrix <- do.call(rbind, result$summaries)
+lga_embeddings <- data.frame(
+  adminName = names(result$summaries),
+  embedding_matrix
+)
+
+# Add area information
+lga_embeddings$area_km2 <- as.numeric(st_area(lgas_subset)) / 1e6
+
+# Now you can use this for clustering, classification, etc.
+head(lga_embeddings[, 1:5])
+```
+
+## Controlling Masking Behavior
+
+By default, pixels outside the region boundary are masked (set to NA).
+You can disable this to include all pixels within the bounding box:
+
+``` r
+# Without masking - uses rectangular bounding box
+result_unmasked <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  mask_to_region = FALSE
+)
+
+# With masking (default) - only pixels inside the polygon
+result_masked <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  mask_to_region = TRUE
+)
+
+# Compare coverage
+result_unmasked$summaries$coverage["n_valid_pixels"]
+result_masked$summaries$coverage["n_valid_pixels"]
+# Masked version will have fewer valid pixels
+```
+
+## Using Bounding Boxes
+
+You can also use simple bounding boxes instead of sf objects:
+
+``` r
+# Define a bounding box (xmin, ymin, xmax, ymax)
+bbox <- c(7.33, 5.08, 7.40, 5.14)
+
+result <- gt$summarize_region(
+  region = bbox,
+  year = 2024
+)
+
+# Note: masking is not applied for bounding boxes
+result$metadata$is_masked
+# [1] FALSE
+```
+
+## Performance Considerations
+
+### Temporary File Management
+
+Downloaded tiles are stored in a temporary directory and automatically
+cleaned up when `summarize_region()` completes. If you need to keep the
+tiles:
+
+``` r
+result <- gt$summarize_region(
+  region = aba_north,
+  year = 2024,
+  keep_tiles = TRUE
+)
+
+# Access the downloaded Tile objects
+tiles <- result$tiles
+length(tiles)
+
+# Load embedding from first tile
+emb <- tiles[[1]]$load_embedding()
+dim(emb)
+```
+
+### Large Regions (Memory-Efficient Streaming)
+
+For very large regions (many tiles), the standard `summarize_region()`
+may run out of memory because it loads all embeddings before computing
+statistics.
+
+Use `summarize_region_streaming()` for memory-efficient processing of
+large single regions:
+
+``` r
+# Abaji LGA requires 36 tiles - too large for standard approach
+abaji <- nigeria_lgas[nigeria_lgas$adminName == "Abaji", ]
+
+# Use streaming approach - processes one tile at a time
+result <- gt$summarize_region_streaming(
+ region = abaji,
+  year = 2024,
+  sample_rate = 0.1,       # Sample 10% of pixels
+  mask_to_region = FALSE   # Skip masking for speed
+)
+
+# Results
+result$mean          # 128-dimensional mean embedding
+result$n_pixels      # Number of pixels processed
+result$metadata$processing_time_secs
+```
+
+The streaming approach:
+
+- **Constant memory**: Processes one tile at a time using Welford’s
+  online algorithm
+- **Sampling support**: Reduce processing time with `sample_rate < 1.0`
+- **No memory issues**: Successfully handles regions with 30+ tiles
+
+### Alternative: Point Sampling Within Polygon
+
+Another memory-efficient approach is to sample random points within the
+polygon and fetch their embeddings:
+
+``` r
+# Sample 1000 random points inside the polygon
+set.seed(42)
+sample_points <- st_sample(abaji, size = 1000)
+coords <- st_coordinates(sample_points)
+points_df <- data.frame(lon = coords[, 1], lat = coords[, 2])
+
+# Fetch embeddings at those points
+embeddings_df <- gt$sample_embeddings_at_points(points_df, year = 2024)
+
+# Compute mean (excluding lon/lat columns)
+mean_embedding <- colMeans(embeddings_df[, -(1:2)], na.rm = TRUE)
+```
+
+## Example: Clustering LGAs by Land Cover Similarity
+
+Here’s a complete example that clusters Nigerian LGAs based on embedding
+similarity, using the optimized multi-region streaming approach:
+
+``` r
+library(GeoTessera)
+library(sf)
+
+# Load shapefile
+nigeria_lgas <- st_read("shapefiles/nigeria_admin2_shapefile.shp", quiet = TRUE)
+
+# Calculate areas and select small LGAs for demo
+nigeria_lgas$area_km2 <- as.numeric(st_area(nigeria_lgas)) / 1e6
+small_lgas <- nigeria_lgas[nigeria_lgas$area_km2 < 100, ]
+small_lgas <- small_lgas[1:20, ]  # Take first 20 for demo
+
+# Initialize client
+gt <- geotessera()
+
+# Compute mean embeddings for all LGAs efficiently
+# This optimizes tile downloads when regions share tiles
+result <- summarize_regions_streaming(
+  gt = gt,
+  regions = small_lgas,
+  year = 2024,
+  region_ids = small_lgas$adminName,
+  sample_rate = 0.1,
+  mask_to_region = TRUE
+)
+
+# Create embedding matrix from results
+emb_matrix <- do.call(rbind, result$summaries)
+
+# Hierarchical clustering
+dist_matrix <- dist(emb_matrix)
+hc <- hclust(dist_matrix, method = "ward.D2")
+
+# Plot dendrogram
+plot(hc, main = "LGA Clustering by Embedding Similarity",
+     xlab = "", sub = "")
+
+# Cut into clusters
+clusters <- cutree(hc, k = 4)
+
+# Add cluster assignments back to spatial data
+small_lgas$cluster <- clusters[small_lgas$adminName]
+
+# Plot clusters on map
+plot(small_lgas["cluster"], main = "LGA Clusters")
+```
+
+## Summary
+
+The `summarize_region()` method provides a convenient pipeline for:
+
+- **Downloading** embeddings for arbitrary regions
+- **Masking** to irregular boundaries from shapefiles
+- **Computing** flexible summary statistics
+- **Cleaning up** temporary files automatically
+
+This enables analysis workflows where you need region-level embeddings
+rather than full pixel-level data, such as:
+
+- Administrative unit characterization
+- Regional clustering and classification
+- Time series analysis at the regional level
+- Feature extraction for machine learning models

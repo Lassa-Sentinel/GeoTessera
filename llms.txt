@@ -1,0 +1,263 @@
+# GeoTessera
+
+R interface to Tessera geofoundation model embeddings.
+
+## Overview
+
+The `GeoTessera` package provides access to 128-channel dense
+representation maps at 10m resolution derived from Sentinel-1 and
+Sentinel-2 satellite imagery via the Tessera foundation model.
+
+## Installation
+
+``` r
+# Install from GitHub (once published)
+# remotes::install_github("lassa_sentinel/GeoTessera")
+
+# Or install from local source
+install.packages("path/to/GeoTessera", repos = NULL, type = "source")
+```
+
+## Quick Start
+
+``` r
+library(GeoTessera)
+
+# Create a GeoTessera client
+gt <- geotessera()
+
+# Get tiles for a region (London)
+tiles <- gt$get_tiles(
+  bbox = c(-0.2, 51.4, 0.1, 51.6),
+  year = 2024
+)
+
+# Export as GeoTIFFs
+gt$export_embedding_geotiffs(
+  tiles = tiles,
+  output_dir = "london_tiles"
+)
+```
+
+## Key Features
+
+- **Download Tessera tiles** for geographic bounding boxes
+- **Export** as GeoTIFF, NumPy arrays, or Zarr archives
+- **Sample embeddings** at specific point locations
+- **Visualize coverage** globally or for specific regions
+- **Country-level** data access support
+- **SHA256 hash verification** for data integrity
+
+## Main Classes
+
+### GeoTessera
+
+The main interface for downloading and exporting embeddings.
+
+``` r
+gt <- geotessera()
+
+# Count available tiles
+count <- gt$embeddings_count(bbox = c(-0.2, 51.4, 0.1, 51.6), year = 2024)
+
+# Download a single tile
+tile <- gt$download_tile(lon = 0.1, lat = 51.5, year = 2024)
+
+# Fetch embedding data
+result <- gt$fetch_embedding(lon = 0.1, lat = 51.5, year = 2024)
+embedding <- result$embedding  # 3D array (height, width, 128 channels)
+
+# Sample at specific points
+points <- data.frame(lon = c(0.1, 0.2), lat = c(51.5, 51.6))
+samples <- gt$sample_embeddings_at_points(points, year = 2024)
+```
+
+### Registry
+
+Manages tile metadata and downloads.
+
+``` r
+registry <- Registry$new()
+
+# Get available years
+years <- registry$get_available_years()
+
+# Count tiles by year
+counts <- registry$get_tile_counts_by_year()
+
+# Load tiles for a region
+tiles <- registry$load_tiles_for_region(
+  bbox = c(-0.2, 51.4, 0.1, 51.6),
+  year = 2024
+)
+```
+
+### Tile
+
+Format-agnostic tile abstraction.
+
+``` r
+# Create from GeoTIFF
+tile <- tile_from_geotiff("path/to/grid_0.15_51.55.tif")
+
+# Load embedding data
+embedding <- tile$load_embedding()
+
+# Sample at a point
+values <- tile$sample_at_point(lon = 0.15, lat = 51.55)
+```
+
+## Visualization
+
+``` r
+# Visualize global coverage
+visualize_global_coverage(gt, output_path = "coverage.png", year = 2024)
+
+# Create RGB mosaic from specific bands
+tiff_files <- list.files("tiles/", pattern = "\\.tif$", full.names = TRUE)
+create_rgb_mosaic(tiff_files, "mosaic_rgb.tif", bands = c(30, 60, 90))
+
+# Create PCA visualization
+create_pca_mosaic(tiff_files, "mosaic_pca.tif", n_components = 3)
+```
+
+## Country Support
+
+``` r
+# Get bounding box for a country
+bbox <- get_country_bbox("United Kingdom")
+
+# Find which country contains a point
+country <- find_country_for_point(lon = -0.1, lat = 51.5)
+```
+
+## Data Organization
+
+Tessera data is organized hierarchically:
+
+1.  **Blocks** (5° x 5° degrees): Registry organization units
+2.  **Tiles** (0.1° x 0.1° degrees): Individual embedding files
+3.  **Pixels** (10m resolution): Within each tile
+
+Each tile contains 128 embedding channels at 1111 x 1111 pixel
+resolution.
+
+## Supported Formats
+
+- **NPY**: Native numpy format with separate scales files
+- **GeoTIFF**: Georeferenced raster format with compression
+- **Zarr**: Chunked array format (experimental)
+
+## Dependencies
+
+Core dependencies: - `R6`: Object-oriented programming - `sf`: Spatial
+data handling - `terra`: Raster operations - `arrow`: Parquet file
+support - `httr2`: HTTP requests - `cli`: Progress bars and messages
+
+Optional for visualization: - `ggplot2`: Plotting - `rnaturalearth`:
+Country boundaries
+
+## License
+
+MIT License
+
+## Acknowledgments
+
+This is an R port of the Python
+[geotessera](https://github.com/avsm/geotessera) package.
+
+# Package index
+
+## Main Interface
+
+- [`geotessera()`](https://lassa-sentinel.github.io/GeoTessera/reference/GeoTessera.md)
+  : GeoTessera Class
+
+## Region Summarization
+
+- [`summarize_regions_streaming()`](https://lassa-sentinel.github.io/GeoTessera/reference/summarize_regions_streaming.md)
+  : Summarize Multiple Regions with Optimized Tile Scheduling
+- [`summary_mean_streaming()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_mean_streaming.md)
+  : Streaming Mean Summary (Memory Efficient)
+- [`summary_centroid()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_centroid.md)
+  : Centroid Embedding Summary
+- [`summary_coverage()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_coverage.md)
+  : Coverage Statistics Summary
+- [`summary_mean()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_mean.md)
+  : Mean Embedding Summary
+- [`summary_median()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_median.md)
+  : Median Embedding Summary
+- [`summary_pixel_count()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_pixel_count.md)
+  : Pixel Count Summary
+- [`summary_quantile()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_quantile.md)
+  : Quantile Summary
+- [`summary_random_sample()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_random_sample.md)
+  : Random Sample Summary
+- [`summary_sd()`](https://lassa-sentinel.github.io/GeoTessera/reference/summary_sd.md)
+  : Standard Deviation Summary
+
+## Tile Operations
+
+- [`Tile`](https://lassa-sentinel.github.io/GeoTessera/reference/Tile.md)
+  : Tile Class for Embedding Data
+- [`tile_from_geotiff()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_geotiff.md)
+  : Create Tile from GeoTIFF file
+- [`tile_from_npy()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_npy.md)
+  : Create Tile from NPY files
+- [`tile_from_zarr()`](https://lassa-sentinel.github.io/GeoTessera/reference/tile_from_zarr.md)
+  : Create Tile from Zarr archive
+- [`discover_tiles()`](https://lassa-sentinel.github.io/GeoTessera/reference/discover_tiles.md)
+  : Discover tiles in a directory
+- [`discover_formats()`](https://lassa-sentinel.github.io/GeoTessera/reference/discover_formats.md)
+  : Discover tiles by format
+
+## Registry
+
+- [`Registry`](https://lassa-sentinel.github.io/GeoTessera/reference/Registry.md)
+  : Registry Class for Tessera Tile Metadata
+- [`get_cache_dir()`](https://lassa-sentinel.github.io/GeoTessera/reference/get_cache_dir.md)
+  : Get default cache directory
+
+## Visualization
+
+- [`visualization`](https://lassa-sentinel.github.io/GeoTessera/reference/visualization.md)
+  : Visualization Functions
+- [`visualize_global_coverage()`](https://lassa-sentinel.github.io/GeoTessera/reference/visualize_global_coverage.md)
+  : Visualize global coverage
+- [`create_rgb_mosaic()`](https://lassa-sentinel.github.io/GeoTessera/reference/create_rgb_mosaic.md)
+  : Create RGB mosaic from GeoTIFFs
+- [`create_pca_mosaic()`](https://lassa-sentinel.github.io/GeoTessera/reference/create_pca_mosaic.md)
+  : Create PCA mosaic visualization
+- [`plot_embedding_bands()`](https://lassa-sentinel.github.io/GeoTessera/reference/plot_embedding_bands.md)
+  : Plot embedding bands
+- [`analyze_geotiff_coverage()`](https://lassa-sentinel.github.io/GeoTessera/reference/analyze_geotiff_coverage.md)
+  : Analyze GeoTIFF coverage
+- [`calculate_bbox_from_file()`](https://lassa-sentinel.github.io/GeoTessera/reference/calculate_bbox_from_file.md)
+  : Calculate bounding box from file
+- [`create_coverage_summary()`](https://lassa-sentinel.github.io/GeoTessera/reference/create_coverage_summary.md)
+  : Create coverage summary
+
+## Country Lookup
+
+- [`country`](https://lassa-sentinel.github.io/GeoTessera/reference/country.md)
+  : Country Lookup Functions
+- [`CountryLookup`](https://lassa-sentinel.github.io/GeoTessera/reference/CountryLookup.md)
+  : Country Lookup Class
+- [`get_country_bbox()`](https://lassa-sentinel.github.io/GeoTessera/reference/get_country_bbox.md)
+  : Get bounding box for a country
+- [`find_country_for_point()`](https://lassa-sentinel.github.io/GeoTessera/reference/find_country_for_point.md)
+  : Find country for a point
+
+# Articles
+
+### Getting Started
+
+- [Getting Started with
+  GeoTessera](https://lassa-sentinel.github.io/GeoTessera/articles/getting-started.md):
+
+### Advanced Usage
+
+- [Summarizing Embeddings for Administrative
+  Regions](https://lassa-sentinel.github.io/GeoTessera/articles/region-summaries.md):
+- [Machine Learning with Tessera
+  Embeddings](https://lassa-sentinel.github.io/GeoTessera/articles/machine-learning.md):
